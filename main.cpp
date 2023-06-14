@@ -1,6 +1,7 @@
 #include <functional>
 #include <stdexcept>
 #include <iostream>
+#include <numeric>
 #include <sstream>
 #include <fstream>
 #include <vector>
@@ -10,6 +11,7 @@
 
 
 #include "Complex.h"
+#include "Vector.h"
 #include "BlockMatrix.h"
 
 
@@ -23,7 +25,7 @@
 #include "Specializations.h"
 #include "Quadrature.h"
 #include "Mesh.h"
-#include "Solver.h"
+//#include "Solver.h"
 
 
 using Scalar = MKL_Complex16;
@@ -32,9 +34,7 @@ using Length = MKL_INT;
 
 int main ()
 {
-
-
-    BlockMatrix <Scalar, Length> block_matrix(6, 6);
+    BlockSystem <Scalar, Length> block_matrix;
 
     return 0;
 }

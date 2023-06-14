@@ -2,26 +2,26 @@
 #define  RCS__MATRIX_H
 
 
-enum SIDE : char
+enum class SIDE : char
 {
     Left  = 'L',
     Right = 'R',
 };
 
-enum UPLO : char
+enum class UPLO : char
 {
     Upper = 'U',
     Lower = 'L',
 };
 
-enum TRAN : char
+enum class TRAN : char
 {
     None = 'N',
     Tran = 'T',
     Conj = 'C',
 };
 
-enum DIAG : char
+enum class DIAG : char
 {
     Unit    = 'U',
     NonUnit = 'N',
@@ -162,7 +162,7 @@ public:
         Length m = rows();
         Length n = cols();
 
-        Length lda = sol_tri.side == Left ? m : n;
+        Length lda = sol_tri.side == SIDE::Left ? m : n;
         Length ldb = m;
 
         Scalar alpha = 1.0;
