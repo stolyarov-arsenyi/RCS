@@ -42,165 +42,252 @@ struct BlockSystem
     column;
 
 
+//    struct Matrix : :: Matrix <Scalar, Length>
+//    {
+//        std::string name;
+//
+//        Matrix (Length cols, Length rows, std::string name) : name(std::move(name))
+//        {
+//            Matrix::cols = cols;
+//            Matrix::rows = rows;
+//        }
+//
+//        bool load ()
+//        {
+//            Matrix::matrix.data.resize(Matrix::cols() * Matrix::rows());
+//
+//            auto data = (char *) Matrix::matrix.data.data();
+//
+//            auto size = (std::streamsize) (Matrix::cols() * Matrix::rows() * sizeof(Scalar));
+//
+//            return std::ifstream(name, std::ios::binary).read(data, size).good();
+//        }
+//
+//        bool save () const
+//        {
+//            auto data = (const char *) Matrix::matrix.data.data();
+//
+//            auto size = (std::streamsize) (Matrix::cols() * Matrix::rows() * sizeof(Scalar));
+//
+//            return std::ofstream(name, std::ios::binary).write(data, size).good();
+//        }
+//
+//        bool exist () const
+//        {
+//            return std::ifstream(name).is_open();
+//        }
+//    };
+//
+//    struct Pivots : :: Pivots <Length>
+//    {
+//        std::string name;
+//
+//        Pivots (Length size, std::string name) : name(std::move(name))
+//        {
+//            Pivots::size = size;
+//        }
+//
+//        bool load ()
+//        {
+//            Pivots::pivots.data.resize(Pivots::size());
+//
+//            auto data = (char *) Pivots::pivots.data.data();
+//
+//            auto size = (std::streamsize) (Pivots::size() * sizeof(Length));
+//
+//            return std::ifstream(name, std::ios::binary).read(data, size).good();
+//        }
+//
+//        bool save () const
+//        {
+//            auto data = (const char *) Pivots::pivots.data.data();
+//
+//            auto size = (std::streamsize) (Pivots::size() * sizeof(Scalar));
+//
+//            return std::ofstream(name, std::ios::binary).write(data, size).good();
+//        }
+//
+//        bool exist () const
+//        {
+//            return std::ifstream(name).is_open();
+//        }
+//    };
 
 
+    template <class ... Num>
 
-//    static void rename(const std::string & name_old, const std::string & name_new)
-//    {
-//        std::rename(name_old.c_str(), name_new.c_str());
-//    }
-//
-//    static bool save (const Matrix <Scalar, Length> & matrix, const std::string & block_name)
-//    {
-//        auto data = (const char *) matrix[0];
-//
-//        auto size = (std::streamsize) matrix.cols() * (std::streamsize) matrix.rows() * (std::streamsize) sizeof(Scalar);
-//
-//        return std::ofstream(block_name).write(data, size).good();
-//    }
-//
-//    static bool save (const Pivots <Length> & pivots, const std::string & block_name)
-//    {
-//        auto data = (const char *) & pivots[0];
-//
-//        auto size = (std::streamsize) pivots.size() * (std::streamsize) sizeof(Length);
-//
-//        return std::ofstream(block_name).write(data, size).good();
-//    }
-//
-//    static bool load (Matrix <Scalar, Length> & matrix, const std::string & block_name)
-//    {
-//        auto data = (char *) matrix[0];
-//
-//        auto size = (std::streamsize) matrix.cols() * (std::streamsize) matrix.rows() * (std::streamsize) sizeof(Scalar);
-//
-//        return std::ifstream(block_name).read(data, size).good();
-//    }
-//
-//    static bool load (Pivots <Length> & pivots, const std::string & block_name)
-//    {
-//        auto data = (char *) & pivots[0];
-//
-//        auto size = (std::streamsize) pivots.size() * (std::streamsize) sizeof(Length);
-//
-//        return std::ifstream(block_name).read(data, size).good();
-//    }
-//
-//
-//    auto load_matrix ()
-//
-//
-//    template <class ... Int>
-//
-//    auto block_name(const std::string & suffix, const std::string & prefix, Int ... ints)-> std::string
-//    {
-//        std::stringstream string;
-//
-//        string << name << "." << prefix << ".";
-//
-//        for (auto i : { ints ... })
-//
-//            string << i << ".";
-//
-//        string << suffix;
-//
-//        return string.str();
-//    }
-//
-//    bool exist(const std::string & block_name)
-//    {
-//        return std::ifstream(block_name).is_open();
-//    }
+    bool matrix_exist (Length c, Length r, Num ... n) const
+    {
+        auto name = matrix_name(c, r, n ...);
+
+        return std::ifstream(name).is_open();
+    }
 
 
-//    template <class  ... Args> void make(Args ...);
+    template <class ... Num>
+
+    auto matrix_name (Length c, Length r, Num ... n) const -> std::string
+    {
+        std::stringstream string;
+
+        string << name << "." << c << "." << r;
+
+        for (auto num : { n ... })
+
+            string << "." << num;
+
+        string << ".matrix";
+
+        return string.str();
+    }
+
+    auto pivots_name (Length n) const -> std::string
+    {
+        std::stringstream string;
+
+        string << name << "." << n << ".pivots";
+
+        return string.str();
+    }
+
+
+    template <class ... Num>
+
+    auto matrix_load (Length c, Length r, Num ... n) const -> Matrix <Scalar, Length>
+    {
+        Matrix <Scalar, Length> mat(matrix.grid.size[c], matrix.grid.size[r]);
+
+        auto data = (char *) mat[0];
+
+        auto size = (std::streamsize) (mat.cols() * mat.rows() * sizeof(Scalar));
+
+        auto name = matrix_name(c, r, n ...);
+
+        std::ifstream(name, std::ios::binary).read(data, size).good();
+
+        return mat;
+    }
+
+    auto pivots_load (Length n) const -> Pivots <Length>
+    {
+        Pivots <Length> piv(matrix.grid.size[n]);
+
+        auto data = (char *) & piv[0];
+
+        auto size = (std::streamsize) (piv.size() * sizeof(Scalar));
+
+        auto name = pivots_name(n);
+
+        std::ifstream(name, std::ios::binary).read(data, size).good();
+
+        return piv;
+    }
+
+
+    template <class ... Num>
+
+    void matrix_save (const Matrix <Scalar, Length> & mat, Length c, Length r, Num ... n) const
+    {
+        auto data = (const char *) mat[0];
+
+        auto size = (std::streamsize) (mat.cols() * mat.rows() * sizeof(Scalar));
+
+        auto name = matrix_name(c, r, n ...);
+
+        std::ofstream(name, std::ios::binary).write(data, size).good();
+    }
+
+    void pivots_save (const Pivots <Length> & piv, Length n) const
+    {
+        auto data = (const char *) piv[0];
+
+        auto size = (std::streamsize) (piv.cols() * piv.rows() * sizeof(Scalar));
+
+        auto name = pivots_name(n);
+
+        std::ofstream(name, std::ios::binary).write(data, size).good();
+    }
 
 
     void prepare_system (const std::function <void (Length, Length, Scalar &)> & func)
     {
         Length N = matrix.grid.size.size();
 
-        std::function <void (Length, Length, Length)> A;
-        std::function <void (Length, Length        )> L;
-        std::function <void (Length, Length        )> U;
-        std::function <void (Length                )> P;
-
-        A = [&] (Length c, Length r, Length n)
+        for (Length n = 0; n < N; n ++)
         {
-            if (n == 0)
+            Length step = n;
+
+            while (step > 0)
             {
-                Matrix <Scalar, Length> A_c_r(matrix.grid.size[c], matrix.grid.size[r]);
+                if (matrix_exist(n, n, step))
 
-                Length cols = std::accumulate(& matrix.grid.size[0], & matrix.grid.size[c], 0);
-                Length rows = std::accumulate(& matrix.grid.size[0], & matrix.grid.size[r], 0);
+                    break;
 
-                for (Length col = 0; col < A_c_r.cols(); col ++)
-                for (Length row = 0; row < A_c_r.rows(); row ++)
-
-                    func(cols + col, rows + row, A_c_r[col][row]);
-
-                save(A_c_r, block_name("matrix", "A", c, r, n));
+                else step --;
             }
-            else
+
+            auto A00 = matrix_load(n, n, step);
+
+
+            if (step == 0 && ! matrix_exist(n, n, step))
             {
-                if (! exist("matrix", "U", c, r - 1))
+                /** Fill matrix **/
 
-                    U(c, r - 1);
+                Length offset = matrix.grid.size[n] * block_size;
 
-                if (! exist("matrix", "L", c - 1, r))
+                for (Length col = 0; col < A00.cols(); col ++)
+                for (Length row = 0; row < A00.rows(); row ++)
 
-                    L(c - 1, r);
+                    func(offset + col, offset + row, A00[col][row]);
 
-                if (! exist("matrix", "A", c, r, n))
-
-                    A(c, r, n);
-
-
-                //A -= L * U;
+                matrix_save(A00, n, n, step);
             }
-        };
-        L = [&] (Length c, Length r)
-        {
-            if (! exist("pivots", "P", c))
 
-                P(c);
+            /** A00(n + 1) = A00(n) - L10(n) * U01(n) **/
 
-            if (! exist("matrix", "A", c, r))
+            while (step < n)
+            {
+                step ++;
 
-                A(c, r);
+                auto U01 = matrix_load(n, step - 1, step);
+                auto L10 = matrix_load(step - 1, n, step);
 
-            make("L", c, r);
-        };
-        U = [&] (Length c, Length r)
-        {
-            if (! exist("pivots", "P", r))
+                A00 -= L10 * U01;
 
-                P(r);
+                matrix_save(A00, n, n, step);
+            }
 
-            if (! exist("matrix", "A", c, r))
+            step ++;
 
-                A(c, r);
+            /** A00 = P00 * L00 * U00 **/
 
-            make("U", c, r);
-        };
-        P = [&] (Length n)
-        {
-            if (! exist("matrix", "A", n, n, n))
+            if (! matrix_exist(n, n, step))
+            {
+                auto P00 = A00.lu_factorization();
 
-                A(n, n, n);
+                matrix_save(A00, n, n, step);
 
-            make("LU", n, n, n);
-        };
+                pivots_save(P00, n);
+            }
 
-        A(0, 0, 0);
-        L(0, 0);
-        U(0, 0);
+            /** Solve L00 * U01 = P00 * A01 **/
 
-        for (Length n = N - 1; n > 0; n ++)
-        {
-            if (! exist("pivots", "P", n))
+            for (Length col = n + 1; col < N; col ++)
+            {
+                if (matrix_exist(n, n, step))
+                {
+                    /** Fill matrix **/
 
-                P(n);
+                    Length offset = matrix.grid.size[n] * block_size;
+
+                    for (Length col = 0; col < A00.cols(); col ++)
+                    for (Length row = 0; row < A00.rows(); row ++)
+
+                        func(offset + col, offset + row, A00[col][row]);
+
+                    matrix_save(A00, n, n, step);
+                }
+            }
         }
     }
 
