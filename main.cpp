@@ -47,7 +47,7 @@ int main ()
 {
     BlockSystem <Scalar, Length> block_system("system");
 
-    block_system.set_block_size(3);
+    block_system.set_block_size(1);
 
     block_system.set_matrix_size(6);
 

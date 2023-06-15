@@ -539,7 +539,7 @@ struct BlockSystem
                 {
                     auto Y = column_load(c, r, 0);
 
-                    auto A = matrix_load(n, r, n + 1);
+                    auto A = matrix_load(n, r, r + 1);
 
                     Y -= A * X;
 
