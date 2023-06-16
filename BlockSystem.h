@@ -1,5 +1,5 @@
-#ifndef  RCS__BLOCKMATRIX_H
-#define  RCS__BLOCKMATRIX_H
+#ifndef  RCS__BLOCKSYSTEM_H
+#define  RCS__BLOCKSYSTEM_H
 
 
 #include "Matrix/Lapack.h"
@@ -19,31 +19,15 @@ struct BlockSystem
     {
         Length size;
 
-        struct
-        {
-            std::vector <Length> size;
-        }
-        grid;
+        std::vector <Length> grid;
     }
-    matrix;
-
-    struct
-    {
-        Length cols;
-        Length rows;
-
-        struct
-        {
-            std::vector <Length> cols;
-            std::vector <Length> rows;
-        }
-        grid;
-    }
+    matrix,
     column;
 
-
-    explicit BlockSystem (std::string name) : name(std::move(name)) {}
-
+    void set_name (const std::string & name)
+    {
+        this -> name = name;
+    }
 
     void set_block_size (Length size)
     {
@@ -54,38 +38,31 @@ struct BlockSystem
     {
         matrix.size = size;
 
-        matrix.grid.size.resize(size / block_size, block_size);
+        matrix.grid.resize(size / block_size, block_size);
 
-        if (size %= block_size) matrix.grid.size.push_back(size);
+        if (size %= block_size) matrix.grid.push_back(size);
     }
 
-    void set_column_size (Length cols, Length rows)
+    void set_column_size (Length size)
     {
-        column.cols = cols;
-        column.rows = rows;
+        column.size = size;
 
-        column.grid.cols.resize(cols / block_size, block_size);
-        column.grid.rows.resize(rows / block_size, block_size);
+        column.grid.resize(size / block_size, block_size);
 
-        if (cols %= block_size) column.grid.cols.push_back(cols);
-        if (rows %= block_size) column.grid.rows.push_back(rows);
+        if (size %= block_size) column.grid.push_back(size);
     }
 
 
-    template <class ... Num>
-
-    bool matrix_exist (Length c, Length r, Num ... n) const
+    bool matrix_exist (Length c, Length r, Length n) const
     {
-        auto name = matrix_name(c, r, n ...);
+        auto name = matrix_name(c, r, n);
 
         return std::ifstream(name).is_open();
     }
 
-    template <class ... Num>
-
-    bool column_exist (Length c, Length r, Num ... n) const
+    bool column_exist (Length c, Length r, Length n) const
     {
-        auto name = column_name(c, r, n ...);
+        auto name = column_name(c, r, n);
 
         return std::ifstream(name).is_open();
     }
@@ -98,36 +75,20 @@ struct BlockSystem
     }
 
 
-    template <class ... Num>
-
-    auto matrix_name (Length c, Length r, Num ... n) const -> std::string
+    auto matrix_name (Length c, Length r, Length n) const -> std::string
     {
         std::stringstream string;
 
-        string << name << "." << c << "." << r;
-
-        for (auto num : { n ... })
-
-            string << "." << num;
-
-        string << ".matrix";
+        string << name << "." << block_size << "." << c << "." << r << "." << n << ".matrix";
 
         return string.str();
     }
 
-    template <class ... Num>
-
-    auto column_name (Length c, Length r, Num ... n) const -> std::string
+    auto column_name (Length c, Length r, Length n) const -> std::string
     {
         std::stringstream string;
 
-        string << name << "." << c << "." << r;
-
-        for (auto num : { n ... })
-
-            string << "." << num;
-
-        string << ".column";
+        string << name << "." << block_size << "." << c << "." << r << "." << n << ".column";
 
         return string.str();
     }
@@ -136,40 +97,36 @@ struct BlockSystem
     {
         std::stringstream string;
 
-        string << name << "." << n << ".pivots";
+        string << name << "." << block_size << "." << n << ".pivots";
 
         return string.str();
     }
 
 
-    template <class ... Num>
-
-    auto matrix_load (Length c, Length r, Num ... n) const -> Matrix <Scalar, Length>
+    auto matrix_load (Length c, Length r, Length n) const -> Matrix <Scalar, Length>
     {
-        Matrix <Scalar, Length> mat(matrix.grid.size[c], matrix.grid.size[r]);
+        Matrix <Scalar, Length> mat(matrix.grid[c], matrix.grid[r]);
 
         auto data = (char *) mat[0];
 
         auto size = (std::streamsize) (mat.cols() * mat.rows() * sizeof(Scalar));
 
-        auto name = matrix_name(c, r, n ...);
+        auto name = matrix_name(c, r, n);
 
         std::ifstream(name, std::ios::binary).read(data, size).good();
 
         return mat;
     }
 
-    template <class ... Num>
-
-    auto column_load (Length c, Length r, Num ... n) const -> Matrix <Scalar, Length>
+    auto column_load (Length c, Length r, Length n) const -> Matrix <Scalar, Length>
     {
-        Matrix <Scalar, Length> col(column.grid.cols[c], column.grid.rows[r]);
+        Matrix <Scalar, Length> col(column.grid[c], matrix.grid[r]);
 
         auto data = (char *) col[0];
 
         auto size = (std::streamsize) (col.cols() * col.rows() * sizeof(Scalar));
 
-        auto name = column_name(c, r, n ...);
+        auto name = column_name(c, r, n);
 
         std::ifstream(name, std::ios::binary).read(data, size).good();
 
@@ -178,7 +135,7 @@ struct BlockSystem
 
     auto pivots_load (Length n) const -> Pivots <Length>
     {
-        Pivots <Length> piv(matrix.grid.size[n]);
+        Pivots <Length> piv(matrix.grid[n]);
 
         auto data = (char *) & piv[0];
 
@@ -192,28 +149,24 @@ struct BlockSystem
     }
 
 
-    template <class ... Num>
-
-    void matrix_save (const Matrix <Scalar, Length> & mat, Length c, Length r, Num ... n) const
+    void matrix_save (const Matrix <Scalar, Length> & mat, Length c, Length r, Length n) const
     {
         auto data = (const char *) mat[0];
 
         auto size = (std::streamsize) (mat.cols() * mat.rows() * sizeof(Scalar));
 
-        auto name = matrix_name(c, r, n ...);
+        auto name = matrix_name(c, r, n);
 
         std::ofstream(name, std::ios::binary).write(data, size).good();
     }
 
-    template <class ... Num>
-
-    void column_save (const Matrix <Scalar, Length> & col, Length c, Length r, Num ... n) const
+    void column_save (const Matrix <Scalar, Length> & col, Length c, Length r, Length n) const
     {
         auto data = (const char *) col[0];
 
         auto size = (std::streamsize) (col.cols() * col.rows() * sizeof(Scalar));
 
-        auto name = column_name(c, r, n ...);
+        auto name = column_name(c, r, n);
 
         std::ofstream(name, std::ios::binary).write(data, size).good();
     }
@@ -230,20 +183,16 @@ struct BlockSystem
     }
 
 
-    template <class ... Num>
-
-    bool matrix_remove (Length c, Length r, Num ... n)
+    bool matrix_remove (Length c, Length r, Length n)
     {
-        auto name = matrix_name(c, r, n ...);
+        auto name = matrix_name(c, r, n);
 
         return std::remove(name.c_str());
     }
 
-    template <class ... Num>
-
-    bool column_remove (Length c, Length r, Num ... n)
+    bool column_remove (Length c, Length r, Length n)
     {
-        auto name = column_name(c, r, n ...);
+        auto name = column_name(c, r, n);
 
         return std::remove(name.c_str());
     }
@@ -277,23 +226,16 @@ struct BlockSystem
             step = 0;
         }
 
-        auto A00 = matrix_load(n, n, step);
-
         /** If A00(0) doesn't exist **/
 
         if (step == 0 && ! matrix_exist(n, n, step))
         {
             /** Fill matrix **/
 
-            Length offset = n * block_size;
-
-            for (Length col = 0; col < A00.cols(); col ++)
-            for (Length row = 0; row < A00.rows(); row ++)
-
-                func(offset + col, offset + row, A00[col][row]);
-
-            matrix_save(A00, n, n, step);
+            matrix_update(n, n, step, func);
         }
+
+        auto A00 = matrix_load(n, n, step);
 
         /** A00(n + 1) = A00(n) - L10(n) * U01(n) **/
 
@@ -337,25 +279,16 @@ struct BlockSystem
 
             return;
 
-
-        auto A01 = matrix_load(c, n, step);
-
         /** If A01(0) doesn't exist **/
 
         if (step == 0 && ! matrix_exist(c, n, step))
         {
             /** Fill matrix **/
 
-            Length cols = c * block_size;
-            Length rows = n * block_size;
-
-            for (Length col = 0; col < A01.cols(); col ++)
-            for (Length row = 0; row < A01.rows(); row ++)
-
-                func(cols + col, rows + row, A01[col][row]);
-
-            matrix_save(A01, c, n, step);
+            matrix_update(c, n, step, func);
         }
+
+        auto A01 = matrix_load(c, n, step);
 
         /** A01(n + 1) = A01(n) - L10(n) * U01(n) **/
 
@@ -403,25 +336,16 @@ struct BlockSystem
 
             return;
 
-
-        auto A10 = matrix_load(n, r, step);
-
         /** If A10(0) doesn't exist **/
 
         if (step == 0 && ! matrix_exist(n, r, step))
         {
             /** Fill matrix **/
 
-            Length cols = n * block_size;
-            Length rows = r * block_size;
-
-            for (Length col = 0; col < A10.cols(); col ++)
-            for (Length row = 0; row < A10.rows(); row ++)
-
-                func(cols + col, rows + row, A10[col][row]);
-
-            matrix_save(A10, n, r, step);
+            matrix_update(n, r, step, func);
         }
+
+        auto A10 = matrix_load(n, r, step);
 
         /** A10(n + 1) = A10(n) - L10(n) * U01(n) **/
 
@@ -448,9 +372,10 @@ struct BlockSystem
         matrix_save(A10, n, r, step);
     };
 
-    void prepare_system (const std::function <void (Length, Length, Scalar &)> & func)
+
+    void prepare_matrix (const std::function <void (Length, Length, Scalar &)> & func)
     {
-        Length N = matrix.grid.size.size();
+        Length N = matrix.grid.size();
 
         for (Length n = 0; n < N; n ++)
         {
@@ -468,27 +393,18 @@ struct BlockSystem
 
     void prepare_column (const std::function <void (Length, Length, Scalar &)> & func)
     {
-        for (Length c = 0; c < column.grid.cols.size(); c ++)
-        for (Length r = 0; r < column.grid.rows.size(); r ++)
+        for (Length c = 0; c < column.grid.size(); c ++)
+        for (Length r = 0; r < matrix.grid.size(); r ++)
         {
-            auto column = column_load(c, r, 0);
-
-            Length cols = c * block_size;
-            Length rows = r * block_size;
-
-            for (Length col = 0; col < column.cols(); col ++)
-            for (Length row = 0; row < column.rows(); row ++)
-
-                func(cols + col, rows + row, column[col][row]);
-
-            column_save(column, c, r, 0);
+            column_update(c, r, 0, func);
         }
     }
 
+
     void prepare_solution ()
     {
-        Length N = matrix.grid.size.size();
-        Length C = column.grid.cols.size();
+        Length N = matrix.grid.size();
+        Length C = column.grid.size();
 
         /** Forward substitution **/
 
@@ -549,18 +465,24 @@ struct BlockSystem
         }
     }
 
-    void process_solution (const std::function <void (Length, Length, Scalar &)> & func)
+    void process_solution (const std::function <void (Length, Length, const Scalar &)> & func)
     {
-
+        for (Length c = 0; c < column.grid.size(); c ++)
+        for (Length r = 0; r < matrix.grid.size(); r ++)
+        {
+            column_traversal(c, r, 0, func);
+        }
     }
 
 
-    void matrix_traversal (Length c, Length r, Length n, const std::function <void (Length, Length, Scalar &)> & func) const
+    void matrix_traversal (Length c, Length r, Length n, const std::function <void (Length, Length, const Scalar &)> & func) const
     {
         auto matrix = matrix_load(c, r, n);
 
         Length cols = c * block_size;
         Length rows = r * block_size;
+
+        #pragma omp parallel for default(none) shared(cols, rows, matrix, func)
 
         for (Length col = 0; col < matrix.cols(); col ++)
         for (Length row = 0; row < matrix.rows(); row ++)
@@ -568,17 +490,54 @@ struct BlockSystem
             func(cols + col, rows + row, matrix[col][row]);
     }
 
-    void column_traversal (Length c, Length r, Length n, const std::function <void (Length, Length, Scalar &)> & func) const
+    void column_traversal (Length c, Length r, Length n, const std::function <void (Length, Length, const Scalar &)> & func) const
     {
         auto column = column_load(c, r, n);
 
         Length cols = c * block_size;
         Length rows = r * block_size;
 
+        #pragma omp parallel for default(none) shared(cols, rows, column, func)
+
         for (Length col = 0; col < column.cols(); col ++)
         for (Length row = 0; row < column.rows(); row ++)
 
             func(cols + col, rows + row, column[col][row]);
+    }
+
+
+    void matrix_update (Length c, Length r, Length n, const std::function <void (Length, Length, Scalar &)> & func) const
+    {
+        auto matrix = matrix_load(c, r, n);
+
+        Length cols = c * block_size;
+        Length rows = r * block_size;
+
+        #pragma omp parallel for default(none) shared(cols, rows, matrix, func)
+
+        for (Length col = 0; col < matrix.cols(); col ++)
+        for (Length row = 0; row < matrix.rows(); row ++)
+
+            func(cols + col, rows + row, matrix[col][row]);
+
+        matrix_save(matrix, c, r, n);
+    }
+
+    void column_update (Length c, Length r, Length n, const std::function <void (Length, Length, Scalar &)> & func) const
+    {
+        auto column = column_load(c, r, n);
+
+        Length cols = c * block_size;
+        Length rows = r * block_size;
+
+        #pragma omp parallel for default(none) shared(cols, rows, column, func)
+
+        for (Length col = 0; col < column.cols(); col ++)
+        for (Length row = 0; row < column.rows(); row ++)
+
+            func(cols + col, rows + row, column[col][row]);
+
+        column_save(column, c, r, n);
     }
 
 
@@ -588,7 +547,7 @@ struct BlockSystem
 
         std::vector <Scalar> array(system_size * system_size);
 
-        Length N = matrix.grid.size.size();
+        Length N = matrix.grid.size();
 
         for (Length n = 0; n < N; n ++)
         {
@@ -628,14 +587,14 @@ struct BlockSystem
 
     auto column_to_string () const -> std::string
     {
-        std::vector <Scalar> array(column.cols * column.rows);
+        std::vector <Scalar> array(column.size * matrix.size);
 
-        for (Length c = 0; c < column.grid.cols.size(); c ++)
-        for (Length r = 0; r < column.grid.rows.size(); r ++)
+        for (Length c = 0; c < column.grid.size(); c ++)
+        for (Length r = 0; r < matrix.grid.size(); r ++)
         {
             column_traversal(c, r, 0, [&] (Length col, Length row, Scalar & val)
             {
-                array[col * column.rows + row] = val;
+                array[col * matrix.size + row] = val;
             });
         }
 
@@ -643,59 +602,14 @@ struct BlockSystem
 
         string << std::showpos << std::fixed;
 
-        for (Length row = 0; row < column.rows; row ++)
-        for (Length col = 0; col < column.cols; col ++)
+        for (Length row = 0; row < matrix.size; row ++)
+        for (Length col = 0; col < column.size; col ++)
 
-            string << array[col * column.rows + row] << (col == column.cols - 1 ? "\n" : ",");
+            string << array[col * matrix.size + row] << (col == column.size - 1 ? "\n" : ",");
 
         return string.str();
-    }
-
-
-    friend std::ostream & operator << (std::ostream & stream, const BlockSystem & block_system)
-    {
-        auto system_size = block_system.matrix.size;
-
-        std::vector <Scalar> array(system_size * system_size);
-
-        Length N = block_system.matrix.grid.size.size();
-
-        for (Length n = 0; n < N; n ++)
-        {
-            block_system.matrix_traversal(n, n, n + 1, [&] (Length col, Length row, Scalar & val)
-            {
-                array[col * system_size + row] = val;
-            });
-
-            for (Length c = n + 1; c < N; c ++)
-            {
-                block_system.matrix_traversal(c, n, n + 1, [&] (Length col, Length row, Scalar & val)
-                {
-                    array[col * system_size + row] = val;
-                });
-            }
-
-            for (Length r = n + 1; r < N; r ++)
-            {
-                block_system.matrix_traversal(n, r, n + 1, [&] (Length col, Length row, Scalar & val)
-                {
-                    array[col * system_size + row] = val;
-                });
-            }
-        }
-
-        std::stringstream string;
-
-        string << std::showpos << std::fixed;
-
-        for (Length row = 0; row < system_size; row ++)
-        for (Length col = 0; col < system_size; col ++)
-
-            string << array[col * system_size + row] << (col == system_size - 1 ? "\n" : ",");
-
-        return stream << string.str();
     }
 };
 
 
-#endif //RCS__BLOCKMATRIX_H
+#endif //RCS__BLOCKSYSTEM_H
