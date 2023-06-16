@@ -1,0 +1,8 @@
+#ifndef RCS_SOLVER_LOGGER_H
+#define RCS_SOLVER_LOGGER_H
+
+
+
+
+
+#endif //RCS_SOLVER_LOGGER_H

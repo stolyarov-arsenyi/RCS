@@ -57,21 +57,36 @@ struct BlockSystem
     {
         auto name = matrix_name(c, r, n);
 
-        return std::ifstream(name).is_open();
+        auto size = matrix.grid[c] * matrix.grid[r] * sizeof(Scalar);
+
+
+        std::ifstream file(name, std::ios::binary | std::ios::ate);
+
+        return file.is_open() && size == file.tellg();
     }
 
     bool column_exist (Length c, Length r, Length n) const
     {
         auto name = column_name(c, r, n);
 
-        return std::ifstream(name).is_open();
+        auto size = column.grid[c] * matrix.grid[r] * sizeof(Scalar);
+
+
+        std::ifstream file(name, std::ios::binary | std::ios::ate);
+
+        return file.is_open() && size == file.tellg();
     }
 
     bool pivots_exist (Length n) const
     {
         auto name = pivots_name(n);
 
-        return std::ifstream(name).is_open();
+        auto size = matrix.grid[n] * sizeof(Length);
+
+
+        std::ifstream file(name, std::ios::binary | std::ios::ate);
+
+        return file.is_open() && size == file.tellg();
     }
 
 
