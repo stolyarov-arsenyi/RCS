@@ -566,14 +566,14 @@ struct BlockSystem
 
         for (Length n = 0; n < N; n ++)
         {
-            matrix_traversal(n, n, n + 1, [&] (Length col, Length row, Scalar & val)
+            matrix_traversal(n, n, n + 1, [&] (Length col, Length row, const Scalar & val)
             {
                 array[col * system_size + row] = val;
             });
 
             for (Length c = n + 1; c < N; c ++)
             {
-                matrix_traversal(c, n, n + 1, [&] (Length col, Length row, Scalar & val)
+                matrix_traversal(c, n, n + 1, [&] (Length col, Length row, const Scalar & val)
                 {
                     array[col * system_size + row] = val;
                 });
@@ -581,7 +581,7 @@ struct BlockSystem
 
             for (Length r = n + 1; r < N; r ++)
             {
-                matrix_traversal(n, r, n + 1, [&] (Length col, Length row, Scalar & val)
+                matrix_traversal(n, r, n + 1, [&] (Length col, Length row, const Scalar & val)
                 {
                     array[col * system_size + row] = val;
                 });
@@ -607,7 +607,7 @@ struct BlockSystem
         for (Length c = 0; c < column.grid.size(); c ++)
         for (Length r = 0; r < matrix.grid.size(); r ++)
         {
-            column_traversal(c, r, 0, [&] (Length col, Length row, Scalar & val)
+            column_traversal(c, r, 0, [&] (Length col, Length row, const Scalar & val)
             {
                 array[col * matrix.size + row] = val;
             });
