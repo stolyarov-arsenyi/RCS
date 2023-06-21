@@ -139,11 +139,15 @@ class Solver
 
     BlockSystem <Co <Scalar>, Length> system;
 
-    Input input;
+    Input  input;
 
     Params params;
 
     Logger logger;
+
+    std::vector <Angles> angles;
+    std::vector <Fields> fields;
+    std::vector <Output> output;
 
 public:
 
@@ -174,6 +178,8 @@ public:
         logger.date() << " - Parsing mesh" << std::endl;
 
         mesh = Mesh <Scalar> :: load_from_stl(mesh_name);
+
+        logger << " - Mesh size: " << mesh.size() << " edges" << std::endl;
     }
 
     void solve ()
@@ -185,11 +191,6 @@ public:
 
         logger.date() << " - Preparing fields" << std::endl;
 
-        std::vector <Angles> angles;
-
-        std::vector <Fields> fields;
-
-
         for (auto inc_phi : range(params.inc.phi.min, params.inc.phi.max, params.inc.phi.inc))
         for (auto inc_the : range(params.inc.the.min, params.inc.the.max, params.inc.the.inc))
         for (auto sca_phi : range(params.sca.phi.min, params.sca.phi.max, params.sca.phi.inc))
@@ -200,6 +201,8 @@ public:
         for (auto angle : angles)
 
             fields.emplace_back(angle, params);
+
+        output.resize(fields.size());
 
 
         system.set_matrix_name(matrix_name());
@@ -236,53 +239,81 @@ public:
 
         logger.date() << " - Processing column" << std::endl;
 
-        std::vector <Output> outputs(fields.size());
-
         system.process_column([&] (Length col, Length row, Co <Scalar> & val)
         {
             auto i_0 = Integrator <Scalar> :: integral(mesh.edge(row).face[0], + fields[col].sca.e, k);
             auto i_1 = Integrator <Scalar> :: integral(mesh.edge(row).face[1], + fields[col].sca.e, k);
 
-            outputs[col].e_field += val * (i_0 - i_1);
+            output[col].e_field += val * (i_0 - i_1);
         });
 
         logger.date() << " - Processing result" << std::endl;
 
-        for (std::size_t o = 0; o < outputs.size(); o ++)
+        for (std::size_t o = 0; o < output.size(); o ++)
         {
-            outputs[o].e_field *= im(k);
+            output[o].e_field *= im(k);
 
-            outputs[o].hh = AbsSquare((outputs[o].e_field, fields[o].sca.h)) / AbsSquare(fields[o].inc.p_y) / 4.0 / M_PI;
-            outputs[o].hv = AbsSquare((outputs[o].e_field, fields[o].sca.h)) / AbsSquare(fields[o].inc.p_x) / 4.0 / M_PI;
-            outputs[o].vh = AbsSquare((outputs[o].e_field, fields[o].sca.v)) / AbsSquare(fields[o].inc.p_y) / 4.0 / M_PI;
-            outputs[o].vv = AbsSquare((outputs[o].e_field, fields[o].sca.v)) / AbsSquare(fields[o].inc.p_x) / 4.0 / M_PI;
+            output[o].hh = AbsSquare((output[o].e_field, fields[o].sca.h)) / AbsSquare(fields[o].inc.p_y) / 4.0 / M_PI;
+            output[o].hv = AbsSquare((output[o].e_field, fields[o].sca.h)) / AbsSquare(fields[o].inc.p_x) / 4.0 / M_PI;
+            output[o].vh = AbsSquare((output[o].e_field, fields[o].sca.v)) / AbsSquare(fields[o].inc.p_y) / 4.0 / M_PI;
+            output[o].vv = AbsSquare((output[o].e_field, fields[o].sca.v)) / AbsSquare(fields[o].inc.p_x) / 4.0 / M_PI;
         }
 
-        logger.date() << " - Finished" << std::endl;
+        logger.date() << " - Saving result" << std::endl;
 
+        save_result_matrix(column_name() + ".csv");
+        save_result_binary(column_name() + ".rcs");
+
+        logger.date() << " - Finished" << std::endl;
+    }
+
+private:
+
+    void save_result_matrix (const std::string & name) const
+    {
         std::ofstream file(system.column_name() + ".csv");
 
         file << "phi_inc, the_inc, phi_sca, the_sca, hh, hv, vh, vv" << std::endl;
 
         file << std::fixed << std::showpos;
 
-        for (std::size_t o = 0; o < outputs.size(); o ++)
+        for (std::size_t o = 0; o < output.size(); o ++)
         {
             file << angles[o].inc.phi << ","
                  << angles[o].inc.the << ","
                  << angles[o].sca.phi << ","
                  << angles[o].sca.the << ","
 
-                 << 10.0 * Log10(outputs[o].hh) << ","
-                 << 10.0 * Log10(outputs[o].hv) << ","
-                 << 10.0 * Log10(outputs[o].vh) << ","
-                 << 10.0 * Log10(outputs[o].vv) << std::endl;
+                 << 10.0 * Log10(output[o].hh) << ","
+                 << 10.0 * Log10(output[o].hv) << ","
+                 << 10.0 * Log10(output[o].vh) << ","
+                 << 10.0 * Log10(output[o].vv) << std::endl;
         }
     }
 
+    void save_result_binary (const std::string & name) const
+    {
+        std::ofstream file(system.column_name() + ".rcs", std::ios::binary);
 
+        std::uint64_t size = output.size();
 
-private:
+        file.write((char *) & size, 8);
+
+        for (std::size_t o = 0; o < output.size(); o ++)
+        {
+            file.write((char *) & angles[o].inc.phi, sizeof(Scalar));
+            file.write((char *) & angles[o].inc.the, sizeof(Scalar));
+            file.write((char *) & angles[o].sca.phi, sizeof(Scalar));
+            file.write((char *) & angles[o].sca.the, sizeof(Scalar));
+
+            file.write((char *) & output[o].e_field.x.r, sizeof(Scalar));
+            file.write((char *) & output[o].e_field.x.i, sizeof(Scalar));
+            file.write((char *) & output[o].e_field.y.r, sizeof(Scalar));
+            file.write((char *) & output[o].e_field.y.i, sizeof(Scalar));
+            file.write((char *) & output[o].e_field.z.r, sizeof(Scalar));
+            file.write((char *) & output[o].e_field.z.i, sizeof(Scalar));
+        }
+    }
 
     auto range (Scalar min, Scalar max, Scalar inc) const -> std::vector <Scalar>
     {
@@ -300,7 +331,7 @@ private:
         return range;
     }
 
-    auto matrix_name () -> std::string
+    auto matrix_name () const -> std::string
     {
         std::stringstream matrix_name;
 
@@ -309,7 +340,7 @@ private:
         return matrix_name.str();
     }
 
-    auto column_name () -> std::string
+    auto column_name () const -> std::string
     {
         std::stringstream column_name;
 
