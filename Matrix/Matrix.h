@@ -30,19 +30,8 @@ enum class DIAG : char
 
 template <class Scalar, class Length>
 
-class Matrix
+struct Matrix
 {
-    struct
-    {
-        std::vector <Scalar> data;
-
-        Length cols;
-        Length rows;
-    }
-    matrix;
-
-public:
-
     Matrix () = default;
 
     Matrix (Length cols, Length rows) : matrix { {}, cols, rows }
@@ -71,6 +60,17 @@ public:
     {
         return matrix.data.data() + col * rows();
     }
+
+protected:
+
+    struct
+    {
+        std::vector <Scalar> data;
+
+        Length cols;
+        Length rows;
+    }
+    matrix;
 
 private:
 

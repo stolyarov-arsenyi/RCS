@@ -1,6 +1,6 @@
 template <class X>
 
-auto AbsSquared (const Re <X> & x) -> Re <X>
+auto AbsSquare (const Re <X> & x) -> Re <X>
 {
     return x * x;
 }
@@ -8,7 +8,7 @@ auto AbsSquared (const Re <X> & x) -> Re <X>
 
 template <class X>
 
-auto AbsSquared (const Co <X> & x) -> Re <X>
+auto AbsSquare (const Co <X> & x) -> Re <X>
 {
     return x.r * x.r + x.i * x.i;
 }
@@ -16,7 +16,7 @@ auto AbsSquared (const Co <X> & x) -> Re <X>
 
 template <class X>
 
-auto AbsSquared (const X & x) -> decltype (re(x))
+auto AbsSquare (const X & x) -> decltype (re(x))
 {
-    return AbsSquared(re(x));
+    return AbsSquare(re(x));
 }

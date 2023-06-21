@@ -4,18 +4,8 @@
 
 template <class Length>
 
-class Pivots
+struct Pivots
 {
-    struct
-    {
-        std::vector <Length> data;
-
-        Length size;
-    }
-    pivots;
-
-public:
-
     Pivots () = default;
 
     Pivots (Length size) : pivots { {}, size }
@@ -38,6 +28,16 @@ public:
     {
         return pivots.data[idx];
     }
+
+protected:
+
+    struct
+    {
+        std::vector <Length> data;
+
+        Length size;
+    }
+    pivots;
 
 
     friend std::ostream & operator << (std::ostream & stream, const Pivots & pivots)

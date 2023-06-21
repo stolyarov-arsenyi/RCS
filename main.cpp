@@ -1,6 +1,7 @@
 #include <functional>
 #include <stdexcept>
 #include <iostream>
+#include <iomanip>
 #include <numeric>
 #include <sstream>
 #include <fstream>
@@ -22,36 +23,309 @@
 #include <omp.h>
 
 
-struct Logger : std::ofstream
+#include "Specializations.h"
+#include "Solver.h"
+
+
+template <class Scalar, class Length>
+
+class Solver
 {
-    using std::ofstream::ofstream;
-
-    template <class X>
-
-    Logger & operator << (X x)
+    struct Params
     {
-        std::cout << x;
+        Scalar wavelength;
 
-        ((std::ofstream &)(* this)) << x;
+        Length omp;
 
-        return * this;
+        struct
+        {
+            struct
+            {
+                Scalar min;
+                Scalar max;
+                Scalar inc;
+            }
+            phi,
+            the;
+        }
+        inc,
+        sca;
+
+        struct
+        {
+            Scalar cos;
+            Scalar sin;
+        }
+        tau,
+        psi;
+    };
+
+    struct Angles
+    {
+        struct Angle
+        {
+            Scalar phi;
+            Scalar the;
+        }
+        inc,
+        sca;
+    };
+
+    struct Fields
+    {
+        struct Field
+        {
+            Vector <Re <Scalar>> e;
+            Vector <Re <Scalar>> v;
+            Vector <Re <Scalar>> h;
+
+            Co <Scalar> p_x;
+            Co <Scalar> p_y;
+
+            Vector <Co <Scalar>> p;
+
+            Field (const Vector <Re <Scalar>> & dir, const class Angles::Angle & angle, const Params & params) : e(dir)
+            {
+                auto radians = M_PI / 180.0;
+
+                auto cos_the = Cos(angle.the * radians);
+                auto sin_the = Sin(angle.the * radians);
+                auto cos_phi = Cos(angle.phi * radians);
+                auto sin_phi = Sin(angle.phi * radians);
+
+                Vector <Re <Scalar>> rot [3] =
+                {
+                    { + cos_the * cos_phi, - sin_phi, + sin_the * cos_phi },
+                    { + cos_the * sin_phi, + cos_phi, + sin_the * sin_phi },
+                    { - sin_the          , +     0.0, + cos_the           }
+                };
+
+                h = { 0.0, 1.0, 0.0 };
+
+                v = h % e;
+
+                e = { (rot[0], e), (rot[1], e), (rot[2], e) };
+                v = { (rot[0], v), (rot[1], v), (rot[2], v) };
+                h = { (rot[0], h), (rot[1], h), (rot[2], h) };
+
+                p_x = co(+ params.psi.cos * params.tau.cos, - params.tau.sin * params.psi.sin);
+                p_y = co(+ params.psi.sin * params.tau.cos, + params.psi.cos * params.tau.sin);
+
+                p = p_x * v + p_y * h;
+            }
+        }
+        inc,
+        sca;
+
+        Fields (const Angles & angles, const Params & params) : inc({ + 0.0, + 0.0, - 1.0 }, angles.inc, params),
+                                                                sca({ + 0.0, + 0.0, + 1.0 }, angles.sca, params) {}
+    };
+
+    struct Output
+    {
+        Vector <Co <Scalar>> e_field;
+
+        Re <Scalar> vv = 0.0;
+        Re <Scalar> vh = 0.0;
+        Re <Scalar> hv = 0.0;
+        Re <Scalar> hh = 0.0;
+    };
+
+
+    std::string conf_name;
+    std::string mesh_name;
+
+    Mesh <Scalar> mesh;
+
+    BlockSystem <Co <Scalar>, Length> system;
+
+    Input input;
+
+    Params params;
+
+    Logger logger;
+
+public:
+
+    Solver (std::string conf_name, std::string mesh_name) : conf_name(std::move(conf_name)), mesh_name(std::move(mesh_name)) {}
+
+    void init ()
+    {
+        Input input = Input::parse(conf_name);
+
+        std::stringstream(input["nopenmp"]) >> params.omp;
+        std::stringstream(input["lymda"  ]) >> params.wavelength;
+
+        std::stringstream(input["ptay0"  ]) >> params.tau.cos >> params.tau.sin;
+        std::stringstream(input["ppsi0"  ]) >> params.psi.cos >> params.psi.sin;
+
+        std::stringstream(input["phi0"  ]) >> params.inc.phi.min >> params.inc.phi.max;
+        std::stringstream(input["phi1"  ]) >> params.sca.phi.min >> params.sca.phi.max;
+        std::stringstream(input["tet0"  ]) >> params.inc.the.min >> params.inc.the.max;
+        std::stringstream(input["tet1"  ]) >> params.sca.the.min >> params.sca.the.max;
+
+        std::stringstream(input["dphi0" ]) >> params.inc.phi.inc;
+        std::stringstream(input["dphi1" ]) >> params.sca.phi.inc;
+        std::stringstream(input["dtet0" ]) >> params.inc.the.inc;
+        std::stringstream(input["dtet1" ]) >> params.sca.the.inc;
+
+        logger = Logger(column_name() + "." + "log");
+
+        logger.date() << " - Parsing mesh" << std::endl;
+
+        mesh = Mesh <Scalar> :: load_from_stl(mesh_name);
     }
 
-    Logger & operator << (std::ostream & (* func) (std::ostream &))
+    void solve ()
     {
-        func(std::cout);
+        auto k = 2.0 * M_PI / params.wavelength;
 
-        func(* this);
+        omp_set_num_threads(params.omp);
 
-        return * this;
+
+        logger.date() << " - Preparing fields" << std::endl;
+
+        std::vector <Angles> angles;
+
+        std::vector <Fields> fields;
+
+
+        for (auto inc_phi : range(params.inc.phi.min, params.inc.phi.max, params.inc.phi.inc))
+        for (auto inc_the : range(params.inc.the.min, params.inc.the.max, params.inc.the.inc))
+        for (auto sca_phi : range(params.sca.phi.min, params.sca.phi.max, params.sca.phi.inc))
+        for (auto sca_the : range(params.sca.the.min, params.sca.the.max, params.sca.the.inc))
+
+            angles.push_back({{ inc_phi, inc_the }, { sca_phi, sca_the }});
+
+        for (auto angle : angles)
+
+            fields.emplace_back(angle, params);
+
+
+        system.set_matrix_name(matrix_name());
+
+        system.set_column_name(column_name());
+
+        system.set_block_memory_usage(4.0);
+
+        system.set_matrix_size(mesh.size());
+
+        system.set_column_size(angles.size());
+
+        logger.date() << " - Preparing matrix" << std::endl << " - Matrix size: " << system.matrix_memory_usage() << " Gb" << std::endl;
+
+        system.prepare_matrix([&] (Length col, Length row, Co <Scalar> & val)
+        {
+            auto i_0_0 = Integrator <Scalar> :: efie(mesh.edge(col).face[0], mesh.edge(row).face[0], k);
+            auto i_0_1 = Integrator <Scalar> :: efie(mesh.edge(col).face[0], mesh.edge(row).face[1], k);
+            auto i_1_0 = Integrator <Scalar> :: efie(mesh.edge(col).face[1], mesh.edge(row).face[0], k);
+            auto i_1_1 = Integrator <Scalar> :: efie(mesh.edge(col).face[1], mesh.edge(row).face[1], k);
+
+            val = im(k) * (i_0_0 - i_0_1 - i_1_0 + i_1_1);
+        });
+
+        logger.date() << " - Preparing column" << std::endl << " - Column size: " << system.column_memory_usage() << " Gb" << std::endl;
+
+        system.prepare_column([&] (Length col, Length row, Co <Scalar> & val)
+        {
+            auto i_0 = Integrator <Scalar> :: integral(mesh.edge(row).face[0], - fields[col].inc.e, k);
+            auto i_1 = Integrator <Scalar> :: integral(mesh.edge(row).face[1], - fields[col].inc.e, k);
+
+            val = ((i_0 - i_1), fields[col].inc.p);
+        });
+
+        logger.date() << " - Processing column" << std::endl;
+
+        std::vector <Output> outputs(fields.size());
+
+        system.process_column([&] (Length col, Length row, Co <Scalar> & val)
+        {
+            auto i_0 = Integrator <Scalar> :: integral(mesh.edge(row).face[0], + fields[col].sca.e, k);
+            auto i_1 = Integrator <Scalar> :: integral(mesh.edge(row).face[1], + fields[col].sca.e, k);
+
+            outputs[col].e_field += val * (i_0 - i_1);
+        });
+
+        logger.date() << " - Processing result" << std::endl;
+
+        for (std::size_t o = 0; o < outputs.size(); o ++)
+        {
+            outputs[o].e_field *= im(k);
+
+            outputs[o].hh = AbsSquare((outputs[o].e_field, fields[o].sca.h)) / AbsSquare(fields[o].inc.p_y) / 4.0 / M_PI;
+            outputs[o].hv = AbsSquare((outputs[o].e_field, fields[o].sca.h)) / AbsSquare(fields[o].inc.p_x) / 4.0 / M_PI;
+            outputs[o].vh = AbsSquare((outputs[o].e_field, fields[o].sca.v)) / AbsSquare(fields[o].inc.p_y) / 4.0 / M_PI;
+            outputs[o].vv = AbsSquare((outputs[o].e_field, fields[o].sca.v)) / AbsSquare(fields[o].inc.p_x) / 4.0 / M_PI;
+        }
+
+        logger.date() << " - Finished" << std::endl;
+
+        std::ofstream file(system.column_name() + ".csv");
+
+        file << "phi_inc, the_inc, phi_sca, the_sca, hh, hv, vh, vv" << std::endl;
+
+        file << std::fixed << std::showpos;
+
+        for (std::size_t o = 0; o < outputs.size(); o ++)
+        {
+            file << angles[o].inc.phi << ","
+                 << angles[o].inc.the << ","
+                 << angles[o].sca.phi << ","
+                 << angles[o].sca.the << ","
+
+                 << 10.0 * Log10(outputs[o].hh) << ","
+                 << 10.0 * Log10(outputs[o].hv) << ","
+                 << 10.0 * Log10(outputs[o].vh) << ","
+                 << 10.0 * Log10(outputs[o].vv) << std::endl;
+        }
+    }
+
+
+
+private:
+
+    auto range (Scalar min, Scalar max, Scalar inc) const -> std::vector <Scalar>
+    {
+        std::vector <Scalar> range;
+
+        while (min < max)
+        {
+            range.push_back(min);
+
+            min += inc;
+        }
+
+        range.push_back(max);
+
+        return range;
+    }
+
+    auto matrix_name () -> std::string
+    {
+        std::stringstream matrix_name;
+
+        matrix_name << mesh_name << ".wav" << params.wavelength;
+
+        return matrix_name.str();
+    }
+
+    auto column_name () -> std::string
+    {
+        std::stringstream column_name;
+
+        column_name << mesh_name << ".wav" << params.wavelength
+
+        << ".inc_phi" << params.inc.phi.min << "_" << params.inc.phi.max << "_" << params.inc.phi.inc
+        << ".inc_the" << params.inc.the.min << "_" << params.inc.the.max << "_" << params.inc.the.inc
+        << ".sca_phi" << params.sca.phi.min << "_" << params.sca.phi.max << "_" << params.sca.phi.inc
+        << ".sca_the" << params.sca.the.min << "_" << params.sca.the.max << "_" << params.sca.the.inc
+
+        << ".tau" << params.tau.cos
+        << ".psi" << params.psi.cos;
+
+        return column_name.str();
     }
 };
-
-
-#include "Specializations.h"
-#include "Quadrature.h"
-#include "Mesh.h"
-#include "Solver.h"
 
 
 using Scalar = double;
@@ -60,60 +334,20 @@ using Length = MKL_INT;
 
 int main (int argc, char ** argv)
 {
-//    if (argc != 3)
-//    {
-//        std::cout << "Wrong number of arguments" << std::endl;
-//
-//        return 0;
-//    }
-//
-//    std::string conf_name = argv[1];
-//    std::string mesh_name = argv[2];
-//
-//    Solver <Scalar, Length> solver(conf_name, mesh_name);
-//
-//    solver.init();
-//    solver.solve();
-
-
-    double arr [6][6] =
+    if (argc != 3)
     {
-        { 3.966261, 2.133467, 1.216731, 5.262742, 4.057779, 8.091164, },
-        { 2.133467, 5.288848, 6.238135, 2.130408, 6.813768, 8.245826, },
-        { 1.216731, 6.238135, 5.880156, 0.952626, 3.437681, 6.434359, },
-        { 5.262742, 2.130408, 0.952626, 6.579653, 2.719752, 2.975403, },
-        { 4.057779, 6.813768, 3.437681, 2.719752, 4.190280, 5.671886, },
-        { 8.091164, 8.245826, 6.434359, 2.975403, 5.671886, 7.223314, },
-    };
+        std::cout << "Wrong number of arguments" << std::endl;
 
+        return 0;
+    }
 
-    BlockSystem <Scalar, Length> block_system;
+    std::string conf_name = argv[1];
+    std::string mesh_name = argv[2];
 
-    block_system.set_name("system");
+    Solver <Scalar, Length> solver(conf_name, mesh_name);
 
-    block_system.set_block_size(2);
-
-    block_system.set_matrix_size(6);
-
-    block_system.set_column_size(1);
-
-    block_system.prepare_matrix([&] (Length col, Length row, Scalar & val)
-    {
-        val = arr[row][col];
-    });
-
-    std::cout << block_system.matrix_to_string() << std::endl;
-
-    block_system.prepare_column([&] (Length col, Length row, Scalar & val)
-   {
-       val = 1.0 + (Scalar) row;
-   });
-
-    std::cout << block_system.column_to_string() << std::endl;
-
-    block_system.prepare_solution();
-
-    std::cout << block_system.column_to_string() << std::endl;
+    solver.init();
+    solver.solve();
 
     return 0;
 }

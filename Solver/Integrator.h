@@ -81,8 +81,8 @@ class Integrator
 
                 auto P_m = Abs(((p_1 - p_m), u));
 
-                auto P_0 = NormSquared(p_0 - p_m);
-                auto P_1 = NormSquared(p_1 - p_m);
+                auto P_0 = NormSquare(p_0 - p_m);
+                auto P_1 = NormSquare(p_1 - p_m);
 
                 auto R_2 = (P_m * P_m + d * d);
 

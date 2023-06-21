@@ -2,11 +2,6 @@
 #define RCS_MESH_MESH_H
 
 
-#include "Mesh/STL.h"
-#include "Mesh/Face.h"
-#include "Mesh/Edge.h"
-
-
 template <class X>
 
 struct Mesh

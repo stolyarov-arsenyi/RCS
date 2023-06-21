@@ -8,16 +8,16 @@ auto vector (const X & x, const Y & y, const Z & z) -> Vector <decltype (x + y +
 
 template <class X>
 
-auto Norm (const Vector <X> & v) -> decltype (AbsSquared(v.x))
+auto Norm (const Vector <X> & v) -> decltype (AbsSquare(v.x))
 {
-    return Sqrt(AbsSquared(v.x) + AbsSquared(v.y) + AbsSquared(v.z));
+    return Sqrt(AbsSquare(v.x) + AbsSquare(v.y) + AbsSquare(v.z));
 }
 
 template <class X>
 
-auto NormSquared (const Vector <X> & v) -> decltype (AbsSquared(v.x))
+auto NormSquare (const Vector <X> & v) -> decltype (AbsSquare(v.x))
 {
-    return AbsSquared(v.x) + AbsSquared(v.y) + AbsSquared(v.z);
+    return AbsSquare(v.x) + AbsSquare(v.y) + AbsSquare(v.z);
 }
 
 

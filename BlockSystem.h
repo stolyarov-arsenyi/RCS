@@ -1,5 +1,5 @@
-#ifndef  RCS__BLOCKSYSTEM_H
-#define  RCS__BLOCKSYSTEM_H
+#ifndef RCS__BLOCKSYSTEM_H
+#define RCS__BLOCKSYSTEM_H
 
 
 #include "Matrix/Lapack.h"
@@ -9,383 +9,131 @@
 
 template <class Scalar, class Length>
 
-struct BlockSystem
+class BlockSystem
 {
-    Length block_size;
+    class MatrixDescriptor;
 
-    std::string name;
+    using Matrix = Matrix <Scalar, Length>;
+
+    using Pivots = Pivots <Length>;
+
 
     struct
     {
-        Length size;
-
         std::vector <Length> grid;
+
+        std::string name;
+
+        Length size = 0;
     }
     matrix,
     column;
 
-    void set_name (const std::string & name)
+    struct
     {
-        this -> name = name;
+        std::vector <std::weak_ptr <MatrixDescriptor>> P;
+        std::vector <std::weak_ptr <MatrixDescriptor>> A;
+        std::vector <std::weak_ptr <MatrixDescriptor>> B;
+
+        Length size = 0;
+    }
+    blocks;
+
+public:
+
+    auto matrix_name () const -> std::string
+    {
+        return matrix.name;
     }
 
-    void set_block_size (Length size)
+    auto column_name () const -> std::string
     {
-        block_size = size;
+        return column.name;
+    }
+
+
+    void set_matrix_name (const std::string & name)
+    {
+        matrix.name = name;
+    }
+
+    void set_column_name (const std::string & name)
+    {
+        column.name = name;
+    }
+
+
+    auto blocks_size () const -> Length
+    {
+        return blocks.size;
+    }
+
+    auto matrix_size () const -> Length
+    {
+        return matrix.size;
+    }
+
+    auto column_size () const -> Length
+    {
+        return column.size;
+    }
+
+
+    void set_blocks_size (Length size)
+    {
+        blocks.size = size;
+
+        set_matrix_size(matrix_size());
+        set_column_size(column_size());
     }
 
     void set_matrix_size (Length size)
     {
         matrix.size = size;
 
-        matrix.grid.resize(size / block_size, block_size);
+        matrix.grid.resize(size / blocks.size, blocks.size);
 
-        if (size %= block_size) matrix.grid.push_back(size);
+        if (size %= blocks.size) matrix.grid.push_back(size);
+
+
+        blocks.P.resize(matrix.grid.size());
+
+        blocks.A.resize(matrix.grid.size() * matrix.grid.size());
     }
 
     void set_column_size (Length size)
     {
         column.size = size;
 
-        column.grid.resize(size / block_size, block_size);
+        column.grid.resize(size / blocks.size, blocks.size);
 
-        if (size %= block_size) column.grid.push_back(size);
+        if (size %= blocks.size) column.grid.push_back(size);
+
+
+        blocks.B.resize(column.grid.size() * matrix.grid.size());
     }
 
 
-    bool matrix_exist (Length c, Length r, Length n) const
+    void set_block_memory_usage (double gb)
     {
-        auto name = matrix_name(c, r, n);
+        auto size_to_gb = sizeof (Scalar) / (1024.0 * 1024.0 * 1024.0);
 
-        auto size = matrix.grid[c] * matrix.grid[r] * sizeof(Scalar);
-
-
-        std::ifstream file(name, std::ios::binary | std::ios::ate);
-
-        return file.is_open() && size == file.tellg();
+        set_blocks_size(std::sqrt(gb / size_to_gb));
     }
 
-    bool column_exist (Length c, Length r, Length n) const
+    auto matrix_memory_usage () const -> double
     {
-        auto name = column_name(c, r, n);
+        auto size_to_gb = sizeof (Scalar) / (1024.0 * 1024.0 * 1024.0);
 
-        auto size = column.grid[c] * matrix.grid[r] * sizeof(Scalar);
-
-
-        std::ifstream file(name, std::ios::binary | std::ios::ate);
-
-        return file.is_open() && size == file.tellg();
+        return matrix_size() * matrix_size() * size_to_gb;
     }
 
-    bool pivots_exist (Length n) const
+    auto column_memory_usage () const -> double
     {
-        auto name = pivots_name(n);
+        auto size_to_gb = sizeof (Scalar) / (1024.0 * 1024.0 * 1024.0);
 
-        auto size = matrix.grid[n] * sizeof(Length);
-
-
-        std::ifstream file(name, std::ios::binary | std::ios::ate);
-
-        return file.is_open() && size == file.tellg();
+        return column_size() * matrix_size() * size_to_gb;
     }
-
-
-    auto matrix_name (Length c, Length r, Length n) const -> std::string
-    {
-        std::stringstream string;
-
-        string << name << "." << block_size << "." << c << "." << r << "." << n << ".matrix";
-
-        return string.str();
-    }
-
-    auto column_name (Length c, Length r, Length n) const -> std::string
-    {
-        std::stringstream string;
-
-        string << name << "." << block_size << "." << c << "." << r << "." << n << ".column";
-
-        return string.str();
-    }
-
-    auto pivots_name (Length n) const -> std::string
-    {
-        std::stringstream string;
-
-        string << name << "." << block_size << "." << n << ".pivots";
-
-        return string.str();
-    }
-
-
-    auto matrix_load (Length c, Length r, Length n) const -> Matrix <Scalar, Length>
-    {
-        Matrix <Scalar, Length> mat(matrix.grid[c], matrix.grid[r]);
-
-        auto data = (char *) mat[0];
-
-        auto size = (std::streamsize) (mat.cols() * mat.rows() * sizeof(Scalar));
-
-        auto name = matrix_name(c, r, n);
-
-        std::ifstream(name, std::ios::binary).read(data, size).good();
-
-        return mat;
-    }
-
-    auto column_load (Length c, Length r, Length n) const -> Matrix <Scalar, Length>
-    {
-        Matrix <Scalar, Length> col(column.grid[c], matrix.grid[r]);
-
-        auto data = (char *) col[0];
-
-        auto size = (std::streamsize) (col.cols() * col.rows() * sizeof(Scalar));
-
-        auto name = column_name(c, r, n);
-
-        std::ifstream(name, std::ios::binary).read(data, size).good();
-
-        return col;
-    }
-
-    auto pivots_load (Length n) const -> Pivots <Length>
-    {
-        Pivots <Length> piv(matrix.grid[n]);
-
-        auto data = (char *) & piv[0];
-
-        auto size = (std::streamsize) (piv.size() * sizeof(Length));
-
-        auto name = pivots_name(n);
-
-        std::ifstream(name, std::ios::binary).read(data, size).good();
-
-        return piv;
-    }
-
-
-    void matrix_save (const Matrix <Scalar, Length> & mat, Length c, Length r, Length n) const
-    {
-        auto data = (const char *) mat[0];
-
-        auto size = (std::streamsize) (mat.cols() * mat.rows() * sizeof(Scalar));
-
-        auto name = matrix_name(c, r, n);
-
-        std::ofstream(name, std::ios::binary).write(data, size).good();
-    }
-
-    void column_save (const Matrix <Scalar, Length> & col, Length c, Length r, Length n) const
-    {
-        auto data = (const char *) col[0];
-
-        auto size = (std::streamsize) (col.cols() * col.rows() * sizeof(Scalar));
-
-        auto name = column_name(c, r, n);
-
-        std::ofstream(name, std::ios::binary).write(data, size).good();
-    }
-
-    void pivots_save (const Pivots <Length> & piv, Length n) const
-    {
-        auto data = (const char *) & piv[0];
-
-        auto size = (std::streamsize) (piv.size() * sizeof(Length));
-
-        auto name = pivots_name(n);
-
-        std::ofstream(name, std::ios::binary).write(data, size).good();
-    }
-
-
-    bool matrix_remove (Length c, Length r, Length n)
-    {
-        auto name = matrix_name(c, r, n);
-
-        return std::remove(name.c_str());
-    }
-
-    bool column_remove (Length c, Length r, Length n)
-    {
-        auto name = column_name(c, r, n);
-
-        return std::remove(name.c_str());
-    }
-
-
-    void prepare_A00 (Length n, const std::function <void (Length, Length, Scalar &)> & func)
-    {
-        Length step = n + 1;
-
-        while (step > 0)
-        {
-            if (matrix_exist(n, n, step))
-
-                break;
-
-            else step --;
-        }
-
-        /** If A00 exist **/
-
-        if (step == n + 1)
-        {
-            if (pivots_exist(n))
-
-                return;
-
-            /** If P00 doesn't exist - compute A00 from scratch**/
-
-            matrix_remove(n, n, step);
-
-            step = 0;
-        }
-
-        /** If A00(0) doesn't exist **/
-
-        if (step == 0 && ! matrix_exist(n, n, step))
-        {
-            /** Fill matrix **/
-
-            matrix_update(n, n, step, func);
-        }
-
-        auto A00 = matrix_load(n, n, step);
-
-        /** A00(n + 1) = A00(n) - L10(n) * U01(n) **/
-
-        while (++ step < n + 1)
-        {
-            auto U01 = matrix_load(n, step - 1, step);
-            auto L10 = matrix_load(step - 1, n, step);
-
-            A00 -= L10 * U01;
-
-            matrix_remove(n, n, step - 1);
-
-            matrix_save(A00, n, n, step);
-        }
-
-        /** A00 = P00 * L00 * U00 **/
-
-        auto P00 = A00.lu_factorization();
-
-        matrix_remove(n, n, step - 1);
-
-        matrix_save(A00, n, n, step);
-
-        pivots_save(P00, n);
-    };
-
-    void prepare_U01 (Length c, Length n, const std::function <void (Length, Length, Scalar &)> & func)
-    {
-        Length step = n + 1;
-
-        while (step > 0)
-        {
-            if (matrix_exist(c, n, step))
-
-                break;
-
-            else step --;
-        }
-
-        if (step == n + 1)
-
-            return;
-
-        /** If A01(0) doesn't exist **/
-
-        if (step == 0 && ! matrix_exist(c, n, step))
-        {
-            /** Fill matrix **/
-
-            matrix_update(c, n, step, func);
-        }
-
-        auto A01 = matrix_load(c, n, step);
-
-        /** A01(n + 1) = A01(n) - L10(n) * U01(n) **/
-
-        while (++ step < n + 1)
-        {
-            auto U01 = matrix_load(c, step - 1, step);
-            auto L10 = matrix_load(step - 1, n, step);
-
-            A01 -= L10 * U01;
-
-            matrix_remove(c, n, step - 1);
-
-            matrix_save(A01, c, n, step);
-        }
-
-        /** Solve P00 * A01 = L00 * U01 **/
-
-        auto A00 = matrix_load(n, n, step);
-
-        auto P00 = pivots_load(n);
-
-        A01 = P00 * A01;
-
-        A01 = SolveTriangular(A00, UPLO::Lower, DIAG::Unit, SIDE::Left, TRAN::None);
-
-        matrix_remove(c, n, step - 1);
-
-        matrix_save(A01, c, n, step);
-    };
-
-    void prepare_L10 (Length n, Length r, const std::function <void (Length, Length, Scalar &)> & func)
-    {
-        Length step = n + 1;
-
-        while (step > 0)
-        {
-            if (matrix_exist(n, r, step))
-
-                break;
-
-            else step --;
-        }
-
-        if (step == n + 1)
-
-            return;
-
-        /** If A10(0) doesn't exist **/
-
-        if (step == 0 && ! matrix_exist(n, r, step))
-        {
-            /** Fill matrix **/
-
-            matrix_update(n, r, step, func);
-        }
-
-        auto A10 = matrix_load(n, r, step);
-
-        /** A10(n + 1) = A10(n) - L10(n) * U01(n) **/
-
-        while (++ step < n + 1)
-        {
-            auto U01 = matrix_load(n, step - 1, step);
-            auto L10 = matrix_load(step - 1, r, step);
-
-            A10 -= L10 * U01;
-
-            matrix_remove(n, r, step - 1);
-
-            matrix_save(A10, n, r, step);
-        }
-
-        /** Solve A10 = L10 * U00 **/
-
-        auto A00 = matrix_load(n, n, step);
-
-        A10 = SolveTriangular(A00, UPLO::Upper, DIAG::NonUnit, SIDE::Right, TRAN::None);
-
-        matrix_remove(n, r, step - 1);
-
-        matrix_save(A10, n, r, step);
-    };
 
 
     void prepare_matrix (const std::function <void (Length, Length, Scalar &)> & func)
@@ -394,223 +142,101 @@ struct BlockSystem
 
         for (Length n = 0; n < N; n ++)
         {
-            prepare_A00(n, func);
+            prepare_matrix_block(n, n, func);
 
             for (Length c = n + 1; c < N; c ++)
 
-                prepare_U01(c, n, func);
+                prepare_matrix_block(c, n, func);
 
             for (Length r = n + 1; r < N; r ++)
 
-                prepare_L10(n, r, func);
+                prepare_matrix_block(n, r, func);
         }
     }
 
     void prepare_column (const std::function <void (Length, Length, Scalar &)> & func)
     {
-        for (Length c = 0; c < column.grid.size(); c ++)
-        for (Length r = 0; r < matrix.grid.size(); r ++)
-        {
-            column_update(c, r, 0, func);
-        }
-    }
-
-
-    void prepare_solution ()
-    {
-        Length N = matrix.grid.size();
         Length C = column.grid.size();
+        Length R = matrix.grid.size();
 
-        /** Forward substitution **/
+        for (Length c = 0; c < C; c ++)
+            for (Length r = R; r > 0; r --)
 
-        for (Length n = 0; n < N; n ++)
-        {
-            auto L = matrix_load(n, n, n + 1);
+                prepare_column_block_x(c, r - 1, func);
 
-            auto P = pivots_load(n);
-
-            for (Length c = 0; c < C; c ++)
+        for (Length c = 0; c < C; c ++)
+            for (Length r = 0; r < R; r ++)
             {
-                auto Y = column_load(c, n, 0);
+                Length step = 0;
 
-                Y = P * Y;
-
-                Y = SolveTriangular(L, UPLO::Lower, DIAG::Unit, SIDE::Left, TRAN::None);
-
-                column_save(Y, c, n, 0);
-
-                for (Length r = n + 1; r < N; r ++)
+                while (step < R + 1)
                 {
-                    auto B = column_load(c, r, 0);
+                    if (column_block(c, r).exist(step))
 
-                    auto A = matrix_load(n, r, n + 1);
+                        column_block(c, r).clear(step);
 
-                    B -= A * Y;
-
-                    column_save(B, c, r, 0);
+                    step ++;
                 }
             }
-        }
+    }
 
-        /** Backward substitution **/
+    void process_column (const std::function <void (Length, Length, Scalar &)> & func)
+    {
+        Length C = column.grid.size();
+        Length R = matrix.grid.size();
 
-        for (Length n = N - 1; n >= 0; n --)
-        {
-            auto U = matrix_load(n, n, n + 1);
-
-            for (Length c = 0; c < C; c ++)
+        for (Length c = 0; c < C; c ++)
+            for (Length r = 0; r < R; r ++)
             {
-                auto X = column_load(c, n, 0);
+                auto C = column_block(c, r);
 
-                X = SolveTriangular(U, UPLO::Upper, DIAG::NonUnit, SIDE::Left, TRAN::None);
+                C.init(R + 1);
 
-                column_save(X, c, n, 0);
-
-                for (Length r = n - 1; r >= 0; r --)
-                {
-                    auto Y = column_load(c, r, 0);
-
-                    auto A = matrix_load(n, r, r + 1);
-
-                    Y -= A * X;
-
-                    column_save(Y, c, r, 0);
-                }
+                C.iterate(func);
             }
-        }
-    }
-
-    void process_solution (const std::function <void (Length, Length, const Scalar &)> & func)
-    {
-        for (Length c = 0; c < column.grid.size(); c ++)
-        for (Length r = 0; r < matrix.grid.size(); r ++)
-        {
-            column_traversal(c, r, 0, func);
-        }
     }
 
 
-    void matrix_traversal (Length c, Length r, Length n, const std::function <void (Length, Length, const Scalar &)> & func) const
+    auto matrix_to_string () -> std::string
     {
-        auto matrix = matrix_load(c, r, n);
-
-        Length cols = c * block_size;
-        Length rows = r * block_size;
-
-        #pragma omp parallel for default(none) shared(cols, rows, matrix, func)
-
-        for (Length col = 0; col < matrix.cols(); col ++)
-        for (Length row = 0; row < matrix.rows(); row ++)
-
-            func(cols + col, rows + row, matrix[col][row]);
-    }
-
-    void column_traversal (Length c, Length r, Length n, const std::function <void (Length, Length, const Scalar &)> & func) const
-    {
-        auto column = column_load(c, r, n);
-
-        Length cols = c * block_size;
-        Length rows = r * block_size;
-
-        #pragma omp parallel for default(none) shared(cols, rows, column, func)
-
-        for (Length col = 0; col < column.cols(); col ++)
-        for (Length row = 0; row < column.rows(); row ++)
-
-            func(cols + col, rows + row, column[col][row]);
-    }
-
-
-    void matrix_update (Length c, Length r, Length n, const std::function <void (Length, Length, Scalar &)> & func) const
-    {
-        auto matrix = matrix_load(c, r, n);
-
-        Length cols = c * block_size;
-        Length rows = r * block_size;
-
-        #pragma omp parallel for default(none) shared(cols, rows, matrix, func)
-
-        for (Length col = 0; col < matrix.cols(); col ++)
-        for (Length row = 0; row < matrix.rows(); row ++)
-
-            func(cols + col, rows + row, matrix[col][row]);
-
-        matrix_save(matrix, c, r, n);
-    }
-
-    void column_update (Length c, Length r, Length n, const std::function <void (Length, Length, Scalar &)> & func) const
-    {
-        auto column = column_load(c, r, n);
-
-        Length cols = c * block_size;
-        Length rows = r * block_size;
-
-        #pragma omp parallel for default(none) shared(cols, rows, column, func)
-
-        for (Length col = 0; col < column.cols(); col ++)
-        for (Length row = 0; row < column.rows(); row ++)
-
-            func(cols + col, rows + row, column[col][row]);
-
-        column_save(column, c, r, n);
-    }
-
-
-    auto matrix_to_string () const -> std::string
-    {
-        auto system_size = matrix.size;
-
-        std::vector <Scalar> array(system_size * system_size);
+        std::vector <Scalar> array(matrix.size * matrix.size);
 
         Length N = matrix.grid.size();
 
         for (Length n = 0; n < N; n ++)
         {
-            matrix_traversal(n, n, n + 1, [&] (Length col, Length row, const Scalar & val)
-            {
-                array[col * system_size + row] = val;
-            });
-
             for (Length c = n + 1; c < N; c ++)
             {
-                matrix_traversal(c, n, n + 1, [&] (Length col, Length row, const Scalar & val)
-                {
-                    array[col * system_size + row] = val;
-                });
+                auto U = matrix_block(c, n);
+
+                U.init(n + 1);
+
+                U.iterate([&] (Length col, Length row, Scalar & val)
+                          {
+                              array[col * matrix.size + row] = val;
+                          });
             }
 
             for (Length r = n + 1; r < N; r ++)
             {
-                matrix_traversal(n, r, n + 1, [&] (Length col, Length row, const Scalar & val)
-                {
-                    array[col * system_size + row] = val;
-                });
+                auto L = matrix_block(n, r);
+
+                L.init(n + 1);
+
+                L.iterate([&] (Length col, Length row, Scalar & val)
+                          {
+                              array[col * matrix.size + row] = val;
+                          });
             }
-        }
 
-        std::stringstream string;
+            auto A = matrix_block(n, n);
 
-        string << std::showpos << std::fixed;
+            A.init(n + 1);
 
-        for (Length row = 0; row < system_size; row ++)
-        for (Length col = 0; col < system_size; col ++)
-
-            string << array[col * system_size + row] << (col == system_size - 1 ? "\n" : ",");
-
-        return string.str();
-    }
-
-    auto column_to_string () const -> std::string
-    {
-        std::vector <Scalar> array(column.size * matrix.size);
-
-        for (Length c = 0; c < column.grid.size(); c ++)
-        for (Length r = 0; r < matrix.grid.size(); r ++)
-        {
-            column_traversal(c, r, 0, [&] (Length col, Length row, const Scalar & val)
-            {
-                array[col * matrix.size + row] = val;
-            });
+            A.iterate([&] (Length col, Length row, Scalar & val)
+                      {
+                          array[col * matrix.size + row] = val;
+                      });
         }
 
         std::stringstream string;
@@ -618,12 +244,503 @@ struct BlockSystem
         string << std::showpos << std::fixed;
 
         for (Length row = 0; row < matrix.size; row ++)
-        for (Length col = 0; col < column.size; col ++)
+            for (Length col = 0; col < matrix.size; col ++)
 
-            string << array[col * matrix.size + row] << (col == column.size - 1 ? "\n" : ",");
+                string << array[col * matrix.size + row] << (col == matrix.size - 1 ? "\n" : ",");
 
         return string.str();
     }
+
+    auto column_to_string () -> std::string
+    {
+        std::vector <Scalar> array(column.size * matrix.size);
+
+        Length C = column.grid.size();
+        Length R = matrix.grid.size();
+
+        for (Length c = 0; c < C; c ++)
+            for (Length r = 0; r < R; r ++)
+            {
+                auto C = column_block(c, r);
+
+                C.init(R + 1);
+
+                C.iterate([&] (Length col, Length row, Scalar & val)
+                          {
+                              array[col * matrix.size + row] = val;
+                          });
+            }
+
+        std::stringstream string;
+
+        string << std::showpos << std::fixed;
+
+        for (Length row = 0; row < matrix.size; row ++)
+            for (Length col = 0; col < column.size; col ++)
+
+                string << array[col * matrix.size + row] << (col == column.size - 1 ? "\n" : ",");
+
+        return string.str();
+    }
+
+private:
+
+    void prepare_matrix_block (Length c, Length r, const std::function <void (Length, Length, Scalar &)> & func)
+    {
+        auto A = matrix_block(c, r);
+
+        /** Determine diagonal index **/
+        auto n = std::min(c, r);
+
+        auto step = n + 1;
+
+        /** Determine missing steps **/
+        while (step > 0)
+        {
+            if (A.exist(step))
+
+                break;
+
+            step --;
+        }
+
+        /** If last step exist **/
+        if (step == n + 1)
+        {
+            /** If it's 'L' or 'U' block - exit **/
+            if (c != r)
+
+                return;
+
+            /** If it's diagonal block - check if it's pivots exist **/
+            if (pivots_block(n).exist())
+
+                return;
+
+            /** If not - compute from diagonal block from scratch **/
+            A.clear(step);
+
+            step = 0;
+        }
+
+        A.init(step);
+
+        /** If block doesn't exist fill it with 'func' **/
+        if (step == 0 && ! A.exist(step))
+        {
+            A.iterate(func);
+
+            A.update(step);
+        }
+
+        /** A(c,r) = L(n,r) * U(c, n) **/
+        while (++ step < n + 1)
+        {
+            auto L = matrix_block(step - 1, r);
+            auto U = matrix_block(c, step - 1);
+
+            L.init(step);
+            U.init(step);
+
+            A -= L * U;
+
+            A.update(step);
+        }
+
+        /** Diagonal block **/
+        if (c == r)
+        {
+            auto P = pivots_block(n);
+
+            P = A.lu_factorization();
+
+            P.save();
+        }
+        else
+
+            /** 'L' column **/
+        if (c > r)
+        {
+            auto L = matrix_block(n, n);
+            auto P = pivots_block(n);
+
+            L.init(step);
+            P.init();
+
+            A = P * A;
+
+            A = SolveTriangular(L, UPLO::Lower, DIAG::Unit, SIDE::Left, TRAN::None);
+        }
+        else
+
+            /** 'U' row **/
+        if (c < r)
+        {
+            auto U = matrix_block(n, n);
+
+            U.init(step);
+
+            A = SolveTriangular(U, UPLO::Upper, DIAG::NonUnit, SIDE::Right, TRAN::None);
+        }
+
+        A.update(step);
+    }
+
+    void prepare_column_block_x (Length c, Length r, const std::function <void (Length, Length, Scalar &)> & func)
+    {
+        auto B = column_block(c, r);
+
+        Length N = matrix.grid.size();
+
+        Length step = N + 1;
+
+        while (step > r + 1)
+        {
+            if (B.exist(step))
+
+                break;
+
+            step --;
+        }
+
+        if (step == N + 1)
+
+            return;
+
+        if (step == r + 1 && ! B.exist(step))
+        {
+            for (Length row = 0; row < r + 1; row ++)
+
+                prepare_column_block_y(c, row, func);
+        }
+
+        B.init(step);
+
+        while (++ step < N + 1)
+        {
+            auto X = column_block(c, step - 1);
+
+            auto U = matrix_block(step - 1, r);
+
+            X.init(N + 1);
+
+            U.init(r + 1);
+
+            B -= U * X;
+
+            B.update(step);
+        }
+
+        auto LU = matrix_block(r, r);
+
+        LU.init(r + 1);
+
+        B = SolveTriangular(LU, UPLO::Upper, DIAG::NonUnit, SIDE::Left, TRAN::None);
+
+        B.update(step);
+    }
+
+    void prepare_column_block_y (Length c, Length r, const std::function <void (Length, Length, Scalar &)> & func)
+    {
+        auto B = column_block(c, r);
+
+        Length N = matrix.grid.size();
+
+        Length step = r + 1;
+
+        while (step > 0)
+        {
+            if (B.exist(step))
+
+                break;
+
+            step --;
+        }
+
+        /** If forward substitution completed - exit **/
+
+        if (step == r + 1)
+
+            return;
+
+        B.init(step);
+
+        if (step == 0 && ! B.exist(step))
+        {
+            B.iterate(func);
+
+            B.update(step);
+        }
+
+        while (++ step < r + 1)
+        {
+            auto Y = column_block(c, step - 1);
+
+            auto L = matrix_block(step - 1, r);
+
+            Y.init(step);
+
+            L.init(step);
+
+            B -= L * Y;
+
+            B.update(step);
+        }
+
+        auto L = matrix_block(r, r);
+
+        auto P = pivots_block(r);
+
+        L.init(step);
+
+        P.init();
+
+        B = P * B;
+
+        B = SolveTriangular(L, UPLO::Lower, DIAG::Unit, SIDE::Left, TRAN::None);
+
+        B.update(step);
+    }
+
+
+    struct MatrixDescriptor : Matrix
+    {
+        std::string prefix;
+        std::string suffix;
+
+        Length col = 0;
+        Length row = 0;
+
+        struct
+        {
+            Length cols = 0;
+            Length rows = 0;
+        }
+        size,
+        grid,
+        bias;
+
+
+        using Matrix::operator  =;
+
+        using Matrix::operator -=;
+
+
+        auto name (Length num) const -> std::string
+        {
+            auto w = std::to_string(std::min(grid.cols, grid.rows)).length();
+
+            std::stringstream string;
+
+            string << std::setfill('0');
+
+            string << prefix << ".";
+
+            string << "c" << std::setw(w) << col << "."
+                   << "r" << std::setw(w) << row << "."
+                   << "n" << std::setw(w) << num << ".";
+
+            string << suffix;
+
+            return string.str();
+        }
+
+
+        void init (Length n)
+        {
+            Matrix::matrix.cols = size.cols;
+
+            Matrix::matrix.rows = size.rows;
+
+            Matrix::matrix.data.resize(Matrix::matrix.cols * Matrix::matrix.rows);
+
+            load(n);
+        }
+
+        void update (Length n)
+        {
+            save(n);
+
+            clear(n - 1);
+        }
+
+
+        bool load (Length n)
+        {
+            auto data = (char *) Matrix::matrix.data.data();
+
+            auto size = (std::streamsize) (Matrix::matrix.data.size() * sizeof(Scalar));
+
+            return std::ifstream(name(n), std::ios::binary).read(data, size).good();
+        }
+
+        bool save (Length n) const
+        {
+            auto data = (const char *) Matrix::matrix.data.data();
+
+            auto size = (std::streamsize) (Matrix::matrix.data.size() * sizeof(Scalar));
+
+            return std::ofstream(name(n), std::ios::binary).write(data, size).good();
+        }
+
+        bool clear (Length n) const
+        {
+            return std::remove(name(n).c_str());
+        }
+
+        bool exist (Length n) const
+        {
+            auto cols = size.cols;
+
+            auto rows = size.rows;
+
+            auto size = (std::ifstream::pos_type) (cols * rows * sizeof(Scalar));
+
+            std::ifstream file(name(n), std::ios::ate | std::ios::binary);
+
+            return file.is_open() && size == file.tellg();
+        }
+
+
+        void iterate (const std::function <void (Length, Length, Scalar &)> & func)
+        {
+#pragma omp parallel for default(none) shared(size, bias, func)
+
+            for (Length col = 0; col < size.cols; col ++)
+                for (Length row = 0; row < size.rows; row ++)
+
+                    func(bias.cols + col, bias.rows + row, (* this)[col][row]);
+        }
+    };
+
+    struct PivotsDescriptor : Pivots
+    {
+        std::string prefix;
+        std::string suffix;
+
+        Length grid = 0;
+        Length diag = 0;
+        Length size = 0;
+
+
+        using Pivots::operator =;
+
+
+        auto name () const -> std::string
+        {
+            auto w = std::to_string(grid).length();
+
+            std::stringstream string;
+
+            string << std::setfill('0');
+
+            string << prefix << ".";
+
+            string << "d" << std::setw(w) << diag << "." << "pivots";
+
+            return string.str();
+        }
+
+
+        void init ()
+        {
+            Pivots::pivots.size = size;
+
+            Pivots::pivots.data.resize(Pivots::pivots.size);
+
+            load();
+        }
+
+
+        bool load ()
+        {
+            auto data = (char *) Pivots::pivots.data.data();
+
+            auto size = (std::streamsize) (Pivots::pivots.data.size() * sizeof(Length));
+
+            return std::ifstream(name(), std::ios::binary).read(data, size).good();
+        }
+
+        bool save () const
+        {
+            auto data = (const char *) Pivots::pivots.data.data();
+
+            auto size = (std::streamsize) (Pivots::pivots.data.size() * sizeof(Length));
+
+            return std::ofstream(name(), std::ios::binary).write(data, size).good();
+        }
+
+        bool clear () const
+        {
+            return std::remove(name().c_str());
+        }
+
+        bool exist () const
+        {
+            std::ifstream file(name(), std::ios::ate | std::ios::binary);
+
+            return file.is_open() && size * sizeof(Length) == file.tellg();
+        }
+    };
+
+
+    auto matrix_block (Length c, Length r) -> MatrixDescriptor
+    {
+        MatrixDescriptor descriptor;
+
+        descriptor.prefix = matrix_name() + ".b" + std::to_string(blocks_size());
+        descriptor.suffix = "matrix";
+
+        descriptor.col = c;
+        descriptor.row = r;
+
+        descriptor.size.cols = matrix.grid[c];
+        descriptor.size.rows = matrix.grid[r];
+
+        descriptor.grid.cols = (Length) matrix.grid.size();
+        descriptor.grid.rows = (Length) matrix.grid.size();
+
+        descriptor.bias.cols = c * blocks_size();
+        descriptor.bias.rows = r * blocks_size();
+
+        return descriptor;
+    }
+
+    auto column_block (Length c, Length r) -> MatrixDescriptor
+    {
+        MatrixDescriptor descriptor;
+
+        descriptor.prefix = column_name() + ".b" + std::to_string(blocks_size());
+        descriptor.suffix = "column";
+
+        descriptor.col = c;
+        descriptor.row = r;
+
+        descriptor.size.cols = column.grid[c];
+        descriptor.size.rows = matrix.grid[r];
+
+        descriptor.grid.cols = (Length) column.grid.size();
+        descriptor.grid.rows = (Length) matrix.grid.size();
+
+        descriptor.bias.cols = c * blocks_size();
+        descriptor.bias.rows = r * blocks_size();
+
+        return descriptor;
+    }
+
+    auto pivots_block (Length d) -> PivotsDescriptor
+    {
+        PivotsDescriptor descriptor;
+
+        descriptor.prefix = matrix_name() + ".b" + std::to_string(blocks_size());
+        descriptor.suffix = "pivots";
+
+        descriptor.diag = d;
+        descriptor.size = matrix.grid[d];
+        descriptor.grid = matrix.grid.size();
+
+        return descriptor;
+    };
 };
 
 
