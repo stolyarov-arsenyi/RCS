@@ -688,7 +688,7 @@ private:
     {
         MatrixDescriptor descriptor;
 
-        descriptor.prefix = matrix_name() + ".b" + std::to_string(blocks_size());
+        descriptor.prefix = matrix_name() + "b" + std::to_string(blocks_size());
         descriptor.suffix = "matrix";
 
         descriptor.col = c;
@@ -710,7 +710,7 @@ private:
     {
         MatrixDescriptor descriptor;
 
-        descriptor.prefix = column_name() + ".b" + std::to_string(blocks_size());
+        descriptor.prefix = column_name() + "b" + std::to_string(blocks_size());
         descriptor.suffix = "column";
 
         descriptor.col = c;
@@ -732,7 +732,7 @@ private:
     {
         PivotsDescriptor descriptor;
 
-        descriptor.prefix = matrix_name() + ".b" + std::to_string(blocks_size());
+        descriptor.prefix = matrix_name() + "b" + std::to_string(blocks_size());
         descriptor.suffix = "pivots";
 
         descriptor.diag = d;
