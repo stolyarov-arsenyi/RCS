@@ -18,6 +18,10 @@ class Solver
 
         Length omp;
 
+        bool monostatic;
+
+        double block;
+
         struct
         {
             struct
@@ -138,6 +142,11 @@ public:
     {
         Input input = Input::parse(conf_name);
 
+        params.monostatic = input[ "phi1"].empty() || input[ "tet1"].empty()
+                         || input["dphi1"].empty() || input["dtet1"].empty();
+
+        std::stringstream(input["block"]) >> params.block;
+
         std::stringstream(input["nopenmp"]) >> params.omp;
         std::stringstream(input["lymda"  ]) >> params.wavelength;
 
@@ -177,12 +186,22 @@ public:
 
         logger.date() << " - Preparing fields" << std::endl;
 
-        for (auto inc_phi : range(params.inc.phi.min, params.inc.phi.max, params.inc.phi.inc))
-        for (auto inc_the : range(params.inc.the.min, params.inc.the.max, params.inc.the.inc))
-        for (auto sca_phi : range(params.sca.phi.min, params.sca.phi.max, params.sca.phi.inc))
-        for (auto sca_the : range(params.sca.the.min, params.sca.the.max, params.sca.the.inc))
+        if (params.monostatic)
+        {
+            for (auto inc_phi : range(params.inc.phi.min, params.inc.phi.max, params.inc.phi.inc))
+            for (auto inc_the : range(params.inc.the.min, params.inc.the.max, params.inc.the.inc))
 
-            angles.push_back({{ inc_phi, inc_the }, { sca_phi, sca_the }});
+                angles.push_back({{ inc_phi, inc_the }, { inc_phi, inc_the }});
+        }
+        else
+        {
+            for (auto inc_phi : range(params.inc.phi.min, params.inc.phi.max, params.inc.phi.inc))
+            for (auto inc_the : range(params.inc.the.min, params.inc.the.max, params.inc.the.inc))
+            for (auto sca_phi : range(params.sca.phi.min, params.sca.phi.max, params.sca.phi.inc))
+            for (auto sca_the : range(params.sca.the.min, params.sca.the.max, params.sca.the.inc))
+
+                angles.push_back({{ inc_phi, inc_the }, { sca_phi, sca_the }});
+        }
 
         for (auto angle : angles)
 
@@ -195,7 +214,11 @@ public:
 
         system.set_column_name(column_name());
 
-        system.set_block_memory_usage(4.0);
+        if (params.block == 0.0)
+
+            params.block = 4.0;
+
+        system.set_block_memory_usage(params.block);
 
         system.set_matrix_size(mesh.size());
 
@@ -270,10 +293,15 @@ private:
                  << angles[o].sca.phi << ","
                  << angles[o].sca.the << ","
 
-                 << 10.0 * Log10(output[o].hh) << ","
-                 << 10.0 * Log10(output[o].hv) << ","
-                 << 10.0 * Log10(output[o].vh) << ","
-                 << 10.0 * Log10(output[o].vv) << std::endl;
+//                 << 10.0 * Log10(output[o].hh) << ","
+//                 << 10.0 * Log10(output[o].hv) << ","
+//                 << 10.0 * Log10(output[o].vh) << ","
+//                 << 10.0 * Log10(output[o].vv) << std::endl;
+
+                 << output[o].hh << ","
+                 << output[o].hv << ","
+                 << output[o].vh << ","
+                 << output[o].vv << std::endl;
         }
     }
 
