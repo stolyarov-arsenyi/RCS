@@ -124,8 +124,6 @@ class Solver
 
     BlockSystem <Co <Scalar>, Length> system;
 
-    Input  input;
-
     Params params;
 
     Logger logger;
@@ -141,9 +139,6 @@ public:
     void init ()
     {
         Input input = Input::parse(conf_name);
-
-        params.monostatic = input[ "phi1"].empty() || input[ "tet1"].empty()
-                         || input["dphi1"].empty() || input["dtet1"].empty();
 
         std::stringstream(input["block"]) >> params.block;
 
@@ -163,6 +158,11 @@ public:
         std::stringstream(input["dtet0" ]) >> params.inc.the.inc;
         std::stringstream(input["dtet1" ]) >> params.sca.the.inc;
 
+        params.monostatic = input[ "phi1"].empty() || input["dphi1"].empty()
+                         || input[ "tet1"].empty() || input["dtet1"].empty();
+
+        if (params.monostatic) params.sca = params.inc;
+
         std::filesystem::create_directories(logger_name());
         std::filesystem::create_directories(matrix_name());
         std::filesystem::create_directories(column_name());
@@ -170,9 +170,22 @@ public:
 
         logger = Logger(logger_name() + "log.txt");
 
-        logger.date() << " - Parsing mesh" << std::endl;
+        logger.date() << " - Preparing mesh" << std::endl;
 
-        mesh = Mesh <Scalar> :: load_from_stl(mesh_name);
+        logger << " - Try to load parsed mesh" << std::endl;
+
+        if (! mesh.load_binary(mesh_name + ".bin"))
+        {
+            logger << " - Parsed mesh doesn't exist" << std::endl;
+
+            logger << " - Parsing mesh" << std::endl;
+
+            mesh = Mesh <Scalar> :: load_from_stl(mesh_name);
+
+            logger << " - Saving parsed mesh" << std::endl;
+
+            mesh.save_binary(mesh_name + ".bin");
+        }
 
         logger << " - Mesh size: " << mesh.size() << " edges" << std::endl;
     }
@@ -270,17 +283,20 @@ public:
 
         logger.date() << " - Saving result" << std::endl;
 
-        save_result_matrix(column_name() + ".csv");
-        save_result_binary(column_name() + ".rcs");
+        save_result_matrix_sm();
+
+        save_result_matrix_db();
+
+        save_result_binary_ef();
 
         logger.date() << " - Finished" << std::endl;
     }
 
 private:
 
-    void save_result_matrix (const std::string & name) const
+    void save_result_matrix_sm () const
     {
-        std::ofstream file(result_name() + "rcs.csv");
+        std::ofstream file(result_name() + "rcs.sm.csv");
 
         file << "phi_inc, the_inc, phi_sca, the_sca, hh, hv, vh, vv" << std::endl;
 
@@ -293,11 +309,6 @@ private:
                  << angles[o].sca.phi << ","
                  << angles[o].sca.the << ","
 
-//                 << 10.0 * Log10(output[o].hh) << ","
-//                 << 10.0 * Log10(output[o].hv) << ","
-//                 << 10.0 * Log10(output[o].vh) << ","
-//                 << 10.0 * Log10(output[o].vv) << std::endl;
-
                  << output[o].hh << ","
                  << output[o].hv << ","
                  << output[o].vh << ","
@@ -305,9 +316,31 @@ private:
         }
     }
 
-    void save_result_binary (const std::string & name) const
+    void save_result_matrix_db () const
     {
-        std::ofstream file(result_name() + "rcs.bin", std::ios::binary);
+        std::ofstream file(result_name() + "rcs.db.csv");
+
+        file << "phi_inc, the_inc, phi_sca, the_sca, hh, hv, vh, vv" << std::endl;
+
+        file << std::fixed << std::showpos;
+
+        for (std::size_t o = 0; o < output.size(); o ++)
+        {
+            file << angles[o].inc.phi << ","
+                 << angles[o].inc.the << ","
+                 << angles[o].sca.phi << ","
+                 << angles[o].sca.the << ","
+
+                 << 10.0 * Log10(output[o].hh) << ","
+                 << 10.0 * Log10(output[o].hv) << ","
+                 << 10.0 * Log10(output[o].vh) << ","
+                 << 10.0 * Log10(output[o].vv) << std::endl;
+        }
+    }
+
+    void save_result_binary_ef () const
+    {
+        std::ofstream file(result_name() + "rcs.ef.bin", std::ios::binary);
 
         std::uint64_t size = output.size();
 

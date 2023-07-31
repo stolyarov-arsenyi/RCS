@@ -4,7 +4,7 @@
 
 template <class X>
 
-struct Mesh
+class Mesh
 {
     std::vector <std::shared_ptr <Vector <Re <X>>>> vertices;
 
@@ -32,6 +32,59 @@ public:
     auto size () const -> std::size_t
     {
         return edges.size();
+    }
+
+
+    bool save_binary (const std::string & name)
+    {
+        std::ofstream file(name, std::ios::binary);
+
+        std::size_t edges_count = edges.size();
+
+        file.write((const char *) & edges_count, sizeof(edges_count));
+
+        for (const auto & e : edges)
+        {
+            const Face <X> & outer = e.face[0];
+            const Face <X> & inner = e.face[1];
+
+            for (int v = 0; v < 3; v ++)
+
+                file.write((const char *) & outer.v(v), sizeof(Vector <Re <X>>));
+
+            for (int v = 0; v < 3; v ++)
+
+                file.write((const char *) & inner.v(v), sizeof(Vector <Re <X>>));
+        }
+
+        return file.good();
+    }
+
+    bool load_binary (const std::string & name)
+    {
+        std::ifstream file(name, std::ios::binary);
+
+        if (! file.is_open())
+
+            return false;
+
+        std::size_t edges_count;
+
+        file.read((char *) & edges_count, sizeof(edges_count));
+
+        for (std::size_t e = 0; e < edges_count; e ++)
+        {
+            Vector <Re <X>> v[6];
+
+            file.read((char *) & v, sizeof(Vector <Re <X>>) * 6);
+
+            Face face_outer(add_vertex(v[0]), add_vertex(v[1]), add_vertex(v[2]));
+            Face face_inner(add_vertex(v[3]), add_vertex(v[4]), add_vertex(v[5]));
+
+            edges.emplace_back(face_outer, face_inner);
+        }
+
+        return file.good();
     }
 
 
