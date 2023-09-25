@@ -34,7 +34,7 @@ using Length = MKL_INT;
 
 int main (int argc, char ** argv)
 {
-    if (argc != 3)
+    if (argc != 4)
     {
         std::cout << "Wrong number of arguments" << std::endl;
 
@@ -43,8 +43,9 @@ int main (int argc, char ** argv)
 
     std::string conf_name = argv[1];
     std::string mesh_name = argv[2];
+    std::string outp_name = argv[3];
 
-    Solver <Scalar, Length> solver(conf_name, mesh_name);
+    Solver <Scalar, Length> solver(conf_name, mesh_name, outp_name);
 
     solver.init();
     solver.solve();

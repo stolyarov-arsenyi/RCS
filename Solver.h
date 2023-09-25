@@ -18,7 +18,7 @@ class Solver
 
         Length omp;
 
-        bool monostatic;
+        int bistatic;
 
         double block;
 
@@ -119,6 +119,7 @@ class Solver
 
     std::string conf_name;
     std::string mesh_name;
+    std::string outp_name;
 
     Mesh <Scalar> mesh;
 
@@ -134,7 +135,9 @@ class Solver
 
 public:
 
-    Solver (std::string conf_name, std::string mesh_name) : conf_name(std::move(conf_name)), mesh_name(std::move(mesh_name)) {}
+    Solver (std::string conf_name, std::string mesh_name, std::string outp_name) : conf_name(std::move(conf_name)),
+                                                                                   mesh_name(std::move(mesh_name)),
+                                                                                   outp_name(std::move(outp_name)) {}
 
     void init ()
     {
@@ -158,10 +161,12 @@ public:
         std::stringstream(input["dtet0" ]) >> params.inc.the.inc;
         std::stringstream(input["dtet1" ]) >> params.sca.the.inc;
 
-        params.monostatic = input[ "phi1"].empty() || input["dphi1"].empty()
-                         || input[ "tet1"].empty() || input["dtet1"].empty();
+//        params.monostatic = input[ "phi1"].empty() || input["dphi1"].empty()
+//                         || input[ "tet1"].empty() || input["dtet1"].empty();
 
-        if (params.monostatic) params.sca = params.inc;
+        std::stringstream(input["angle"]) >> params.bistatic;
+
+        if (! params.bistatic) params.sca = params.inc;
 
         std::filesystem::create_directories(logger_name());
         std::filesystem::create_directories(matrix_name());
@@ -199,7 +204,7 @@ public:
 
         logger.date() << " - Preparing fields" << std::endl;
 
-        if (params.monostatic)
+        if (! params.bistatic)
         {
             for (auto inc_phi : range(params.inc.phi.min, params.inc.phi.max, params.inc.phi.inc))
             for (auto inc_the : range(params.inc.the.min, params.inc.the.max, params.inc.the.inc))
@@ -289,6 +294,8 @@ public:
 
         save_result_binary_ef();
 
+        copy_result();
+
         logger.date() << " - Finished" << std::endl;
     }
 
@@ -361,6 +368,15 @@ private:
             file.write((char *) & output[o].e_field.z.i, sizeof(Scalar));
         }
     }
+
+
+    void copy_result () const
+    {
+        std::filesystem::copy(result_name() + "rcs.sm.csv", outp_name + ".sm.csv");
+        std::filesystem::copy(result_name() + "rcs.db.csv", outp_name + ".db.csv");
+        std::filesystem::copy(result_name() + "rcs.ef.bin", outp_name + ".ef.bin");
+    }
+
 
     auto range (Scalar min, Scalar max, Scalar inc) const -> std::vector <Scalar>
     {
