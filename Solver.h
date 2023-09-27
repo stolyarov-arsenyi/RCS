@@ -172,6 +172,7 @@ public:
         std::filesystem::create_directories(matrix_name());
         std::filesystem::create_directories(column_name());
         std::filesystem::create_directories(result_name());
+        std::filesystem::create_directories(result_name());
 
         logger = Logger(logger_name() + "log.txt");
 
@@ -372,6 +373,12 @@ private:
 
     void copy_result () const
     {
+        std::filesystem::path path(outp_name);
+
+        if (!path.parent_path().empty())
+
+            std::filesystem::create_directories(path.parent_path());
+
         std::filesystem::copy(result_name() + "rcs.sm.csv", outp_name + ".sm.csv");
         std::filesystem::copy(result_name() + "rcs.db.csv", outp_name + ".db.csv");
         std::filesystem::copy(result_name() + "rcs.ef.bin", outp_name + ".ef.bin");
